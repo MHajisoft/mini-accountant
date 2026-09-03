@@ -224,3 +224,33 @@ class BackupOmitsCvvTest {
         assertThat(unzipped.replace(" ", "")).contains("\"includesSecrets\":false")
     }
 }
+
+class CategoryRulesTest {
+    @Test
+    fun systemCategoriesCannotBeDeleted() {
+        val system = ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog.systemCategories().first()
+        assertThat(ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules.canDelete(system)).isFalse()
+    }
+
+    @Test
+    fun customExpenseCategoryIsNotSystem() {
+        val custom = ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules.custom(
+            name = "قهوه",
+            iconKey = "restaurant",
+            color = 0xFFE65100,
+            kind = ir.mhajisoft.miniaccountant.domain.model.CategoryKind.EXPENSE,
+        )
+        assertThat(custom.isSystem).isFalse()
+        assertThat(ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules.canDelete(custom)).isTrue()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun customTransferCategoryRejected() {
+        ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules.custom(
+            name = "جابه‌جایی سفارشی",
+            iconKey = "swap_horiz",
+            color = 0xFF78909C,
+            kind = ir.mhajisoft.miniaccountant.domain.model.CategoryKind.TRANSFER,
+        )
+    }
+}

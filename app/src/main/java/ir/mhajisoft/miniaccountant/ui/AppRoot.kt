@@ -17,6 +17,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -39,7 +40,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -56,6 +57,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -199,13 +201,20 @@ fun AppRoot(
         floatingActionButton = {
             val current = backStack.lastOrNull()
             if (current is RouteHome || current is RouteTxns) {
-                FloatingActionButton(
-                    onClick = { composerMode = 0; showComposer = true },
-                    modifier = Modifier.combinedClickable(
+                Surface(
+                    shape = FloatingActionButtonDefaults.shape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.size(56.dp).combinedClickable(
                         onClick = { composerMode = 0; showComposer = true },
                         onLongClick = { composerMode = 2; showComposer = true },
                     ),
-                ) { Icon(SymbolIcons.Add, stringResource(R.string.add_expense)) }
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(SymbolIcons.Add, stringResource(R.string.add_expense))
+                    }
+                }
             }
         },
     ) { padding ->
@@ -215,16 +224,18 @@ fun AppRoot(
             onBack = { backStack.removeLastOrNull() },
             entryProvider = entryProvider {
                 entry<RouteHome> {
-                    HomeScreen(state, onChip = { id -> backStack.add(RouteFiltered(accountId = id)) }, onTxn = { txn ->
-                        if (txn.transferId != null) notify(ctx.getString(R.string.transfer_leg_locked))
-                    })
+                    HomeScreen(
+                        state,
+                        onChip = { id -> backStack.add(RouteFiltered(accountId = id)) },
+                        onDelete = vm::deleteTxnOrTransfer,
+                        onEdit = vm::updateTxn,
+                    )
                 }
                 entry<RouteTxns> {
                     TxnListScreen(
                         state,
-                        onDelete = vm::deleteTxn,
+                        onDelete = vm::deleteTxnOrTransfer,
                         onEdit = vm::updateTxn,
-                        onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
                     )
                 }
                 entry<RouteReports> {
@@ -233,7 +244,7 @@ fun AppRoot(
                 entry<RouteMore> { MoreScreen { backStack.add(it) } }
                 entry<RouteAccounts> { AccountsScreen(state, vm) }
                 entry<RoutePeople> { PeopleScreen(state, vm) }
-                entry<RouteCategories> { CategoriesScreen(state.categories) }
+                entry<RouteCategories> { CategoriesScreen(state, vm) { notify(it) } }
                 entry<RouteVault> {
                     VaultScreen(vm, onSecureWindow, onAddCard = { backStack.add(RouteCardForm) })
                 }
@@ -252,9 +263,8 @@ fun AppRoot(
                                     (key.accountId == null || it.accountId == key.accountId)
                             },
                         ),
-                        onDelete = vm::deleteTxn,
+                        onDelete = vm::deleteTxnOrTransfer,
                         onEdit = vm::updateTxn,
-                        onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
                     )
                 }
             },
@@ -331,8 +341,15 @@ fun OnboardingScreen(vm: AppViewModel) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(state: AppUiState, onChip: (String) -> Unit, onTxn: (LedgerTransaction) -> Unit) {
+fun HomeScreen(
+    state: AppUiState,
+    onChip: (String) -> Unit,
+    onDelete: (LedgerTransaction) -> Unit,
+    onEdit: (LedgerTransaction) -> Unit,
+) {
     val toman = state.settings.displayToman
+    var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
+    var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text(stringResource(R.string.total_balance), style = MaterialTheme.typography.labelLarge)
@@ -340,7 +357,7 @@ fun HomeScreen(state: AppUiState, onChip: (String) -> Unit, onTxn: (LedgerTransa
         }
         item {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.balances.forEach { ab ->
+                state.balances.filter { it.account.type != AccountType.PERSON }.forEach { ab ->
                     FilterChip(
                         selected = false,
                         onClick = { onChip(ab.account.id) },
@@ -354,9 +371,32 @@ fun HomeScreen(state: AppUiState, onChip: (String) -> Unit, onTxn: (LedgerTransa
             item { Text(stringResource(R.string.empty_home)) }
         } else {
             items(state.recent, key = { it.id }) { txn ->
-                TxnRow(txn, state, onClick = { onTxn(txn) })
+                TxnRow(txn, state, onClick = {
+                    if (txn.transferId == null) editing = txn
+                }, onLongClick = { pendingDelete = txn })
             }
         }
+    }
+    editing?.let { txn ->
+        EditTxnDialog(
+            txn = txn,
+            toman = state.settings.displayToman,
+            onDismiss = { editing = null },
+            onSave = { updated ->
+                onEdit(updated)
+                editing = null
+            },
+        )
+    }
+    pendingDelete?.let { txn ->
+        ConfirmDeleteDialog(
+            txn = txn,
+            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                onDelete(txn)
+                pendingDelete = null
+            },
+        )
     }
 }
 
@@ -378,16 +418,26 @@ fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit, onLon
 @Composable
 fun TxnListScreen(
     state: AppUiState,
-    onDelete: (String) -> Unit,
+    onDelete: (LedgerTransaction) -> Unit,
     onEdit: (LedgerTransaction) -> Unit = {},
-    onLocked: () -> Unit = {},
 ) {
     var q by remember { mutableStateOf("") }
     var accountFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
+    var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
+    val needle = PersianDigits.toAscii(q).lowercase()
     val grouped = state.txns
-        .filter { q.isBlank() || it.note.contains(q) || it.id.contains(q) }
+        .filter { txn ->
+            if (needle.isBlank()) return@filter true
+            val cat = state.categories.firstOrNull { it.id == txn.categoryId }?.name.orEmpty()
+            val acc = state.accounts.firstOrNull { it.id == txn.accountId }?.name.orEmpty()
+            txn.note.contains(q) ||
+                cat.contains(q) ||
+                acc.contains(q) ||
+                txn.id.contains(needle) ||
+                PersianDigits.toAscii(txn.note).contains(needle)
+        }
         .filter { accountFilter == null || it.accountId == accountFilter }
         .filter { categoryFilter == null || it.categoryId == categoryFilter }
         .groupBy { Triple(it.jalaliYear, it.jalaliMonth, it.jalaliDay) }
@@ -395,7 +445,7 @@ fun TxnListScreen(
         OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(16.dp), label = { Text(stringResource(R.string.search)) })
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(accountFilter == null, { accountFilter = null }, { Text(stringResource(R.string.all)) })
-            state.accounts.take(6).forEach { acc ->
+            state.accounts.filter { it.type != AccountType.PERSON && !it.archived }.take(6).forEach { acc ->
                 FilterChip(accountFilter == acc.id, { accountFilter = acc.id }, { Text(acc.name) })
             }
         }
@@ -419,10 +469,8 @@ fun TxnListScreen(
                     }
                     items(rows, key = { it.id }) { txn ->
                         TxnRow(txn, state, onClick = {
-                            if (txn.transferId != null) onLocked() else editing = txn
-                        }, onLongClick = {
-                            if (txn.transferId != null) onLocked() else onDelete(txn.id)
-                        })
+                            if (txn.transferId == null) editing = txn
+                        }, onLongClick = { pendingDelete = txn })
                     }
                 }
             }
@@ -439,6 +487,43 @@ fun TxnListScreen(
             },
         )
     }
+    pendingDelete?.let { txn ->
+        ConfirmDeleteDialog(
+            txn = txn,
+            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                onDelete(txn)
+                pendingDelete = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDeleteDialog(
+    txn: LedgerTransaction,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.delete)) },
+        text = {
+            Text(
+                if (txn.transferId != null) {
+                    stringResource(R.string.confirm_delete_transfer)
+                } else {
+                    stringResource(R.string.confirm_delete)
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable
@@ -598,6 +683,8 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
     var type by remember { mutableStateOf(AccountType.CASH) }
     var include by remember { mutableStateOf(true) }
     var opening by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<Account?>(null) }
+    val ledgerAccounts = state.accounts.filter { it.type != AccountType.PERSON }
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_account)) })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -618,30 +705,83 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
                 opening = ""
             }
         }) { Text(stringResource(R.string.save)) }
-        if (state.balances.isEmpty()) Text(stringResource(R.string.empty_accounts))
-        state.balances.forEach { ab ->
-            val typeLabel = when (ab.account.type) {
+        if (ledgerAccounts.isEmpty()) Text(stringResource(R.string.empty_accounts))
+        ledgerAccounts.forEach { acc ->
+            val typeLabel = when (acc.type) {
                 AccountType.CASH -> stringResource(R.string.type_cash)
                 AccountType.BANK -> stringResource(R.string.type_bank)
                 AccountType.CARD -> stringResource(R.string.type_card)
                 AccountType.PERSON -> stringResource(R.string.type_person)
             }
+            val bal = state.balances.firstOrNull { it.account.id == acc.id }?.balanceSigned
             ListItem(
-                headlineContent = { Text(ab.account.name) },
-                supportingContent = { Text(typeLabel) },
-                trailingContent = { Text(formatMoney(ab.balanceSigned, state.settings.displayToman)) },
+                headlineContent = { Text(acc.name) },
+                supportingContent = {
+                    Text(
+                        buildString {
+                            append(typeLabel)
+                            if (acc.archived) {
+                                append(" · ")
+                                append(stringResource(R.string.archived))
+                            }
+                        },
+                    )
+                },
+                trailingContent = {
+                    Text(formatMoney(bal ?: 0L, state.settings.displayToman))
+                },
+                modifier = Modifier.clickable { editing = acc },
             )
         }
+    }
+    editing?.let { acc ->
+        var editName by remember(acc.id) { mutableStateOf(acc.name) }
+        var editInclude by remember(acc.id) { mutableStateOf(acc.includeInTotal) }
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(stringResource(R.string.edit)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(editName, { editName = it }, label = { Text(stringResource(R.string.name)) })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(editInclude, { editInclude = it })
+                        Text(stringResource(R.string.include_in_total))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.updateAccount(acc.copy(name = editName, includeInTotal = editInclude))
+                    editing = null
+                }) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    vm.archiveAccount(acc.id, !acc.archived)
+                    editing = null
+                }) {
+                    Text(stringResource(if (acc.archived) R.string.unarchive_account else R.string.archive_account))
+                }
+            },
+        )
     }
 }
 
 @Composable
 fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
     var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_person)) })
-        Button(onClick = { if (name.isNotBlank()) { vm.addPerson(name, null, null); name = "" } }) {
+        OutlinedTextField(phone, { phone = it }, label = { Text(stringResource(R.string.phone)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+        Button(onClick = {
+            if (name.isNotBlank()) {
+                vm.addPerson(name, phone.ifBlank { null }, null)
+                name = ""
+                phone = ""
+            }
+        }) {
             Text(stringResource(R.string.save))
         }
         OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.pay_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -651,7 +791,15 @@ fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
             val label = if (bal >= 0) stringResource(R.string.debtor) else stringResource(R.string.creditor)
             ListItem(
                 headlineContent = { Text(p.name) },
-                supportingContent = { Text(label) },
+                supportingContent = {
+                    Text(buildString {
+                        append(label)
+                        p.phone?.takeIf { it.isNotBlank() }?.let {
+                            append(" · ")
+                            append(it)
+                        }
+                    })
+                },
                 trailingContent = { Text(formatMoney(kotlin.math.abs(bal), state.settings.displayToman)) },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
@@ -666,23 +814,71 @@ fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CategoriesScreen(categories: List<Category>) {
-    LazyColumn {
-        items(categories, key = { it.id }) { cat ->
-            ListItem(
-                headlineContent = { Text(cat.name) },
-                supportingContent = {
-                    Text(
-                        when (cat.kind) {
-                            CategoryKind.EXPENSE -> stringResource(R.string.expense)
-                            CategoryKind.INCOME -> stringResource(R.string.income)
-                            CategoryKind.TRANSFER -> stringResource(R.string.transfer)
-                        },
+fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf(CategoryKind.EXPENSE) }
+    var iconKey by remember { mutableStateOf(SymbolIcons.customIconKeys.first()) }
+    var color by remember { mutableStateOf(0xFF1565C0L) }
+    val palette = listOf(0xFFE65100L, 0xFF1565C0L, 0xFF6A1B9AL, 0xFF2E7D32L, 0xFFC62828L, 0xFF00838FL, 0xFFAD1457L, 0xFF37474FL)
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_category)) })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(kind == CategoryKind.EXPENSE, { kind = CategoryKind.EXPENSE }, { Text(stringResource(R.string.expense)) })
+                FilterChip(kind == CategoryKind.INCOME, { kind = CategoryKind.INCOME }, { Text(stringResource(R.string.income)) })
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SymbolIcons.customIconKeys.forEach { key ->
+                    FilterChip(
+                        selected = iconKey == key,
+                        onClick = { iconKey = key },
+                        label = { Icon(SymbolIcons.byKey(key), null, Modifier.size(18.dp)) },
                     )
-                },
-                leadingContent = { Icon(SymbolIcons.byKey(cat.iconKey), null, tint = Color(cat.color or 0xFF000000)) },
-            )
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                palette.forEach { c ->
+                    FilterChip(
+                        selected = color == c,
+                        onClick = { color = c },
+                        label = { Box(Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(SymbolIcons.Category, null, tint = Color(c or 0xFF000000)) },
+                    )
+                }
+            }
+            Button(onClick = {
+                if (name.isNotBlank()) {
+                    vm.addCustomCategory(name, iconKey, color, kind)
+                    name = ""
+                }
+            }) { Text(stringResource(R.string.save)) }
+        }
+        LazyColumn {
+            items(state.categories, key = { it.id }) { cat ->
+                ListItem(
+                    headlineContent = { Text(cat.name) },
+                    supportingContent = {
+                        Text(
+                            when {
+                                cat.isSystem -> stringResource(R.string.system_category)
+                                cat.kind == CategoryKind.EXPENSE -> stringResource(R.string.expense)
+                                cat.kind == CategoryKind.INCOME -> stringResource(R.string.income)
+                                else -> stringResource(R.string.transfer)
+                            },
+                        )
+                    },
+                    leadingContent = { Icon(SymbolIcons.byKey(cat.iconKey), null, tint = Color(cat.color or 0xFF000000)) },
+                    trailingContent = {
+                        if (!cat.isSystem) {
+                            TextButton(onClick = {
+                                vm.deleteCustomCategory(cat.id) { onError(it) }
+                            }) { Text(stringResource(R.string.delete)) }
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -1155,6 +1351,7 @@ fun PreviewHome() {
                 ),
                 categories = ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog.systemCategories(),
             ),
+            {},
             {},
             {},
         )

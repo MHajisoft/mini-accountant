@@ -129,4 +129,12 @@
     <string name="all">همه</string>
     <string name="bank_mellat_name">بانک ملت</string>
     <string name="cvv_fa">رمز دوم</string>
+    <string name="add_category">دستهٔ سفارشی</string>
+    <string name="system_category">سیستمی</string>
+    <string name="archive_account">بایگانی حساب</string>
+    <string name="unarchive_account">بازگرداندن حساب</string>
+    <string name="archived">بایگانی‌شده</string>
+    <string name="confirm_delete">این تراکنش حذف شود؟</string>
+    <string name="confirm_delete_transfer">هر دو طرف این جابه‌جایی حذف می‌شوند. ادامه می‌دهید؟</string>
+    <string name="add_transfer_hint">نگه‌داشتن + برای جابه‌جایی</string>
 </resources>

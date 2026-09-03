@@ -18,6 +18,7 @@ import ir.mhajisoft.miniaccountant.domain.jalali.JalaliConverter
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliYmd
 import ir.mhajisoft.miniaccountant.domain.ledger.BalanceMath
 import ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog
+import ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules
 import ir.mhajisoft.miniaccountant.domain.ledger.OpeningBalancePoster
 import ir.mhajisoft.miniaccountant.domain.ledger.SystemCategories
 import ir.mhajisoft.miniaccountant.domain.ledger.TransferPoster
@@ -25,6 +26,7 @@ import ir.mhajisoft.miniaccountant.domain.model.Account
 import ir.mhajisoft.miniaccountant.domain.model.AccountOpeningBalance
 import ir.mhajisoft.miniaccountant.domain.model.AccountType
 import ir.mhajisoft.miniaccountant.domain.model.Category
+import ir.mhajisoft.miniaccountant.domain.model.CategoryKind
 import ir.mhajisoft.miniaccountant.domain.model.Direction
 import ir.mhajisoft.miniaccountant.domain.model.FiscalYear
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
@@ -174,6 +176,26 @@ class LedgerRepository @Inject constructor(
     suspend fun upsertAccount(account: Account) = accounts.upsert(account.toEntity())
 
     suspend fun upsertCategory(category: Category) = categories.upsert(category.toEntity())
+
+    suspend fun addCustomCategory(name: String, iconKey: String, color: Long, kind: CategoryKind): Category {
+        val cat = CategoryRules.custom(name, iconKey, color, kind)
+        categories.upsert(cat.toEntity())
+        return cat
+    }
+
+    suspend fun deleteCustomCategory(id: String) {
+        val entity = categories.get(id) ?: return
+        val cat = entity.toDomain()
+        require(CategoryRules.canDelete(cat)) { "دسته‌های سیستمی حذف نمی‌شوند" }
+        val used = txns.getAll().any { it.categoryId == id }
+        require(!used) { "این دسته در تراکنش‌ها استفاده شده است" }
+        categories.delete(entity)
+    }
+
+    suspend fun archiveAccount(id: String, archived: Boolean) {
+        val entity = accounts.get(id) ?: return
+        accounts.update(entity.copy(archived = archived, updatedAt = System.currentTimeMillis()))
+    }
 
     suspend fun addTransaction(txn: LedgerTransaction) {
         require(txn.amount >= 0L)
