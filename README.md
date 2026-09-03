@@ -38,7 +38,7 @@ The **core ledger works with zero Google Play services** (Iran / Cafe Bazaar bui
 
 - **Local SAF backup always works.**
 - **Google Drive** (`drive.appdata`) is hidden or disabled when `GoogleApiAvailability` reports no GMS, with Persian copy.
-- **OneDrive** (MSAL + Graph `approot`) stays disabled until `ONEDRIVE_CLIENT_ID` is set in `local.properties`. The app never fakes a successful cloud upload.
+- **OneDrive** (MSAL + Graph `approot`) stays disabled until Azure/`ONEDRIVE_CLIENT_ID` setup is complete. The app never fakes a successful cloud upload.
 
 ## Stack
 

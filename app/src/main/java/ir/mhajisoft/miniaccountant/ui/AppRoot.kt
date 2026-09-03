@@ -223,6 +223,7 @@ fun AppRoot(
                     TxnListScreen(
                         state,
                         onDelete = vm::deleteTxn,
+                        onEdit = vm::updateTxn,
                         onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
                     )
                 }
@@ -252,6 +253,7 @@ fun AppRoot(
                             },
                         ),
                         onDelete = vm::deleteTxn,
+                        onEdit = vm::updateTxn,
                         onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
                     )
                 }
@@ -377,11 +379,13 @@ fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit, onLon
 fun TxnListScreen(
     state: AppUiState,
     onDelete: (String) -> Unit,
+    onEdit: (LedgerTransaction) -> Unit = {},
     onLocked: () -> Unit = {},
 ) {
     var q by remember { mutableStateOf("") }
     var accountFilter by remember { mutableStateOf<String?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
     val grouped = state.txns
         .filter { q.isBlank() || it.note.contains(q) || it.id.contains(q) }
         .filter { accountFilter == null || it.accountId == accountFilter }
@@ -415,7 +419,7 @@ fun TxnListScreen(
                     }
                     items(rows, key = { it.id }) { txn ->
                         TxnRow(txn, state, onClick = {
-                            if (txn.transferId != null) onLocked()
+                            if (txn.transferId != null) onLocked() else editing = txn
                         }, onLongClick = {
                             if (txn.transferId != null) onLocked() else onDelete(txn.id)
                         })
@@ -424,6 +428,53 @@ fun TxnListScreen(
             }
         }
     }
+    editing?.let { txn ->
+        EditTxnDialog(
+            txn = txn,
+            toman = state.settings.displayToman,
+            onDismiss = { editing = null },
+            onSave = { updated ->
+                onEdit(updated)
+                editing = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditTxnDialog(
+    txn: LedgerTransaction,
+    toman: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (LedgerTransaction) -> Unit,
+) {
+    val initial = Money.toDisplayUnit(txn.amount, toman).toString()
+    var amount by remember { mutableStateOf(PersianDigits.toPersian(initial)) }
+    var note by remember { mutableStateOf(txn.note) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.edit)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    amount,
+                    { amount = it },
+                    label = { Text(stringResource(R.string.amount)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.note)) })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val parsed = Money.parseDisplayAmount(amount, toman) ?: return@TextButton
+                onSave(txn.copy(amount = parsed, note = note))
+            }) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable
