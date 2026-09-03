@@ -61,7 +61,7 @@
     <string name="unknown_bank">بانک شناسایی نشد</string>
     <string name="card_number">شماره کارت</string>
     <string name="iban">شبا</string>
-    <string name="cvv">CVV2</string>
+    <string name="cvv">رمز دوم</string>
     <string name="remember_cvv">به‌خاطر سپردن CVV2 (پیش‌فرض خاموش)</string>
     <string name="cvv_warning">CVV2 ذخیره نمی‌شود مگر این گزینه را روشن کنید. در پشتیبان هرگز نمی‌آید.</string>
     <string name="reveal_pan">نمایش شماره کامل</string>
@@ -112,4 +112,21 @@
     <string name="upload_onedrive">آپلود وان‌درایو</string>
     <string name="fy_reset_farvardin">تغییر شروع به ۱ فروردین</string>
     <string name="cloud_not_configured">پشتیبان ابری پیکربندی نشده است. پشتیبان محلی همیشه کار می‌کند.</string>
+    <string name="new_card">کارت جدید</string>
+    <string name="fy_start_month">ماه شروع</string>
+    <string name="fy_start_day">روز شروع</string>
+    <string name="pick_date">انتخاب تاریخ</string>
+    <string name="close_year">بستن سال جاری و شروع سال بعد</string>
+    <string name="year_mode">سال</string>
+    <string name="month_mode">ماه</string>
+    <string name="reveal_cvv">نمایش CVV2</string>
+    <string name="copy">کپی</string>
+    <string name="cannot_archive_current">ابتدا سال جاری را ببندید</string>
+    <string name="pay_amount">مبلغ تسویه</string>
+    <string name="read_only">فقط‌خواندنی</string>
+    <string name="filter_account">حساب</string>
+    <string name="filter_category">دسته</string>
+    <string name="all">همه</string>
+    <string name="bank_mellat_name">بانک ملت</string>
+    <string name="cvv_fa">رمز دوم</string>
 </resources>

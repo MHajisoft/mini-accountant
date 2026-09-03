@@ -15,6 +15,7 @@ import ir.mhajisoft.miniaccountant.data.local.toEntity
 import ir.mhajisoft.miniaccountant.domain.fiscal.FiscalRebucketer
 import ir.mhajisoft.miniaccountant.domain.fiscal.FiscalYearCalculator
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliConverter
+import ir.mhajisoft.miniaccountant.domain.jalali.JalaliYmd
 import ir.mhajisoft.miniaccountant.domain.ledger.BalanceMath
 import ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog
 import ir.mhajisoft.miniaccountant.domain.ledger.OpeningBalancePoster
@@ -59,8 +60,12 @@ class LedgerRepository @Inject constructor(
     val categoriesFlow: Flow<List<Category>> = categories.observeAll().map { list -> list.map { it.toDomain() } }
     val currentFyFlow: Flow<FiscalYear?> = fiscalYears.observeCurrent().map { it?.toDomain() }
     val fiscalYearsFlow: Flow<List<FiscalYear>> = fiscalYears.observeAll().map { list -> list.map { it.toDomain() } }
-    val recentTxnsFlow: Flow<List<LedgerTransaction>> =
-        txns.observeRecent(5).map { list -> list.map { it.toDomain() } }
+    val recentTxnsFlow: Flow<List<LedgerTransaction>> = combine(
+        txns.observeRecent(20),
+        fiscalYears.observeCurrent(),
+    ) { list, fy ->
+        list.filter { fy == null || it.fiscalYearId == fy.id }.take(5).map { it.toDomain() }
+    }
     val allTxnsFlow: Flow<List<LedgerTransaction>> =
         txns.observeAll().map { list -> list.map { it.toDomain() } }
     val peopleFlow: Flow<List<Person>> = people.observeAll().map { list -> list.map { it.toDomain() } }
@@ -75,39 +80,76 @@ class LedgerRepository @Inject constructor(
         val fyId = fy?.id
         val openingMap = openingRows.filter { it.fiscalYearId == fyId }
             .associate { it.accountId to it.amountSigned }
-        val snapMap = snaps.groupBy { it.accountId }.mapValues { e -> e.value.sumOf { it.amountSigned } }
-        val liveByAccount = txnRows.groupBy { it.accountId }
+        val snapMap = snaps.groupBy { it.accountId }
+            .mapValues { e -> e.value.maxBy { it.capturedAt }.amountSigned }
+        val liveByAccount = txnRows.filter { fyId == null || it.fiscalYearId == fyId }.groupBy { it.accountId }
         accs.map { entity ->
             val account = entity.toDomain()
             val live = liveByAccount[account.id].orEmpty().map { it.toDomain() }
+            val opening = openingMap[account.id]
+            val prior = if (opening != null) 0L else (snapMap[account.id] ?: 0L)
             val bal = BalanceMath.accountBalance(
-                openingSigned = openingMap[account.id] ?: 0L,
+                openingSigned = opening ?: 0L,
                 liveTxns = live,
-                archivedSnapshotsSigned = snapMap[account.id] ?: 0L,
+                archivedSnapshotsSigned = prior,
             )
             AccountBalance(account, bal)
         }
     }
 
     suspend fun homeBalancesNow(): List<AccountBalance> {
+        val fy = fiscalYears.getCurrent() ?: return emptyList()
+        return balancesForYear(fy.id)
+    }
+
+    suspend fun balancesForYear(fyId: String): List<AccountBalance> {
         val accs = accounts.getAll().filter { !it.archived }
-        val fy = fiscalYears.getCurrent()
-        val openingMap = fy?.let { openings.forYear(it.id) }
-            ?.associate { it.accountId to it.amountSigned }
-            ?: emptyMap()
-        val snapMap = snapshots.getAll().groupBy { it.accountId }
-            .mapValues { e -> e.value.sumOf { it.amountSigned } }
+        val openingMap = openings.forYear(fyId).associate { it.accountId to it.amountSigned }
+        val liveByAccount = txns.forYear(fyId).groupBy { it.accountId }
         return accs.map { entity ->
-            val live = txns.forAccount(entity.id).map { it.toDomain() }
+            val live = liveByAccount[entity.id].orEmpty().map { it.toDomain() }
             AccountBalance(
                 entity.toDomain(),
-                BalanceMath.accountBalance(
-                    openingMap[entity.id] ?: 0L,
-                    live,
-                    snapMap[entity.id] ?: 0L,
-                ),
+                BalanceMath.accountBalance(openingMap[entity.id] ?: 0L, live, 0L),
             )
         }
+    }
+
+    suspend fun closeCurrentAndStartNext(now: Long): FiscalYear {
+        val current = fiscalYears.getCurrent() ?: error("no fiscal year")
+        val oldStart = JalaliYmd(current.startJalaliYear, current.startJalaliMonth, current.startJalaliDay)
+        val nextFromCycle = FiscalYearCalculator.windowStarting(FiscalYearCalculator.nextStart(oldStart))
+        val containing = FiscalYearCalculator.windowContaining(
+            now,
+            current.startJalaliMonth,
+            current.startJalaliDay,
+        )
+        val nextWindow = if (containing.startEpoch > current.startEpoch) containing else nextFromCycle
+        val closings = balancesForYear(current.id)
+        snapshots.upsertAll(
+            closings.map { ab ->
+                ir.mhajisoft.miniaccountant.data.local.entity.BalanceSnapshotEntity(
+                    id = UUID.randomUUID().toString(),
+                    fiscalYearId = current.id,
+                    accountId = ab.account.id,
+                    amountSigned = ab.balanceSigned,
+                    capturedAt = now,
+                )
+            },
+        )
+        fiscalYears.closeAndDemote(current.id, now)
+        val nextFy = FiscalYearCalculator.toModel(UUID.randomUUID().toString(), nextWindow, isCurrent = true)
+        fiscalYears.upsert(nextFy.toEntity())
+        closings.forEach { ab ->
+            openings.upsert(
+                ir.mhajisoft.miniaccountant.domain.model.AccountOpeningBalance(
+                    fiscalYearId = nextFy.id,
+                    accountId = ab.account.id,
+                    amountSigned = ab.balanceSigned,
+                ).toEntity(),
+            )
+        }
+        return nextFy
     }
 
     suspend fun ensureSeeded(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) {

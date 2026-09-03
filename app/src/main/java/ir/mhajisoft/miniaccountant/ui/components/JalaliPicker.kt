@@ -17,7 +17,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ir.mhajisoft.miniaccountant.R
 import ir.mhajisoft.miniaccountant.domain.jalali.BirashkAlgorithm
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliConverter
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliLabels
@@ -38,12 +40,12 @@ fun JalaliDatePickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(JalaliYmd(year, month, day)) }) { Text("تأیید") }
+            TextButton(onClick = { onConfirm(JalaliYmd(year, month, day)) }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("انصراف") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
-        title = { Text("انتخاب تاریخ") },
+        title = { Text(stringResource(R.string.pick_date)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

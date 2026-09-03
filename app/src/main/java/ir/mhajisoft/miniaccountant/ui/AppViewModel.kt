@@ -38,6 +38,7 @@ data class AppUiState(
     val txns: List<LedgerTransaction> = emptyList(),
     val people: List<Person> = emptyList(),
     val fy: FiscalYear? = null,
+    val fiscalYears: List<FiscalYear> = emptyList(),
     val ready: Boolean = false,
 ) {
     val total: Long
@@ -72,7 +73,8 @@ class AppViewModel @Inject constructor(
             ledger.allTxnsFlow,
             ledger.peopleFlow,
             ledger.currentFyFlow,
-        ) { txns, people, fy -> Triple(txns, people, fy) },
+            ledger.fiscalYearsFlow,
+        ) { txns, people, fy, years -> Triple(txns, people, fy to years) },
     ) { left, right ->
         val settings = left.first
         val balances = left.second.first
@@ -87,7 +89,8 @@ class AppViewModel @Inject constructor(
             recent = recent,
             txns = right.first,
             people = right.second,
-            fy = right.third,
+            fy = right.third.first,
+            fiscalYears = right.third.second,
             ready = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
@@ -209,6 +212,23 @@ class AppViewModel @Inject constructor(
     suspend fun pnl(fyId: String, month: Int) = ledger.monthPnL(fyId, month)
 
     fun archiveYear(id: String) { viewModelScope.launch { archive.archiveClosedYear(id) } }
+
+    fun closeCurrentYear() { viewModelScope.launch { ledger.closeCurrentAndStartNext(System.currentTimeMillis()) } }
+
+    fun payPerson(personAccountId: String, amountDisplay: String, theyPay: Boolean) {
+        viewModelScope.launch {
+            val s = state.value.settings
+            val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: return@launch
+            val other = s.defaultAccountId
+                ?: state.value.accounts.firstOrNull { it.type != AccountType.PERSON }?.id
+                ?: return@launch
+            if (theyPay) {
+                ledger.postTransfer(personAccountId, other, amount, null, System.currentTimeMillis(), "")
+            } else {
+                ledger.postTransfer(other, personAccountId, amount, null, System.currentTimeMillis(), "")
+            }
+        }
+    }
 
     fun updateTxn(txn: LedgerTransaction) {
         viewModelScope.launch { runCatching { ledger.updateTransaction(txn) } }

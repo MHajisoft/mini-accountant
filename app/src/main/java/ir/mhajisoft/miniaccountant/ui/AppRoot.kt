@@ -96,6 +96,9 @@ import com.patrykandpatrick.vico.compose.cartesian.data.columnSeries
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.pie.PieChartHost
+import com.patrykandpatrick.vico.compose.pie.data.PieChartModelProducer
+import com.patrykandpatrick.vico.compose.pie.data.pieSeries
+import com.patrykandpatrick.vico.compose.pie.rememberPieChart
 import ir.mhajisoft.miniaccountant.MainActivity
 import ir.mhajisoft.miniaccountant.R
 import ir.mhajisoft.miniaccountant.domain.bank.BankMatch
@@ -137,7 +140,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteBackup : NavKey
 @Serializable data object RouteLock : NavKey
 @Serializable data object RouteSettings : NavKey
-@Serializable data class RouteFiltered(val categoryId: String) : NavKey
+@Serializable data class RouteFiltered(val categoryId: String? = null, val accountId: String? = null) : NavKey
+@Serializable data class RouteArchiveViewer(val fileName: String) : NavKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,6 +162,9 @@ fun AppRoot(
     var showComposer by remember { mutableStateOf(false) }
     var composerMode by remember { mutableIntStateOf(0) }
     val snack = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    fun notify(msg: String) { scope.launch { snack.showSnackbar(msg) } }
     Scaffold(
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
@@ -208,11 +215,17 @@ fun AppRoot(
             onBack = { backStack.removeLastOrNull() },
             entryProvider = entryProvider {
                 entry<RouteHome> {
-                    HomeScreen(state, onChip = {}, onTxn = { txn ->
-                        if (txn.transferId != null) snack.showSoon("جابه‌جایی")
+                    HomeScreen(state, onChip = { id -> backStack.add(RouteFiltered(accountId = id)) }, onTxn = { txn ->
+                        if (txn.transferId != null) notify(ctx.getString(R.string.transfer_leg_locked))
                     })
                 }
-                entry<RouteTxns> { TxnListScreen(state, onDelete = vm::deleteTxn) }
+                entry<RouteTxns> {
+                    TxnListScreen(
+                        state,
+                        onDelete = vm::deleteTxn,
+                        onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
+                    )
+                }
                 entry<RouteReports> {
                     ReportScreen(state, vm) { catId -> backStack.add(RouteFiltered(catId)) }
                 }
@@ -225,14 +238,21 @@ fun AppRoot(
                 }
                 entry<RouteCardForm> { CardFormScreen(state, vm, onSecureWindow) }
                 entry<RouteFiscal> { FiscalScreen(state, vm) }
-                entry<RouteArchive> { ArchiveScreen(state, vm) }
+                entry<RouteArchive> { ArchiveScreen(state, vm) { backStack.add(RouteArchiveViewer(it)) } }
+                entry<RouteArchiveViewer> { key -> ArchiveViewerScreen(vm, key.fileName) }
                 entry<RouteBackup> { BackupScreen(vm) }
                 entry<RouteLock> { LockSettingsScreen(state, vm) }
                 entry<RouteSettings> { SettingsScreen(state, vm) }
                 entry<RouteFiltered> { key ->
                     TxnListScreen(
-                        state.copy(txns = state.txns.filter { it.categoryId == key.categoryId }),
+                        state.copy(
+                            txns = state.txns.filter {
+                                (key.categoryId == null || it.categoryId == key.categoryId) &&
+                                    (key.accountId == null || it.accountId == key.accountId)
+                            },
+                        ),
                         onDelete = vm::deleteTxn,
+                        onLocked = { notify(ctx.getString(R.string.transfer_leg_locked)) },
                     )
                 }
             },
@@ -260,27 +280,25 @@ private fun rewind(stack: NavBackStack<NavKey>, tab: NavKey) {
     stack.add(tab)
 }
 
-private fun androidx.compose.material3.SnackbarHostState.showSoon(msg: String) = Unit
-
 @Composable
 fun OnboardingScreen(vm: AppViewModel) {
     var step by remember { mutableIntStateOf(0) }
     val today = vm.jalaliToday
     var month by remember { mutableIntStateOf(1) }
     var day by remember { mutableIntStateOf(1) }
-    var cashName by remember { mutableStateOf("نقد") }
+    var cashName by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf("") }
     var lock by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
-        Text("حسابدار کوچک", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
         when (step) {
             0 -> {
                 Text(stringResource(R.string.onboarding_fy_title), style = MaterialTheme.typography.titleLarge)
                 Text(stringResource(R.string.onboarding_fy_body))
-                Text("سال ${PersianDigits.toPersian(today.year.toString())} — پیش‌فرض ۱ فروردین")
-                OutlinedTextField(PersianDigits.toPersian(month.toString()), { month = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text("ماه شروع") })
-                OutlinedTextField(PersianDigits.toPersian(day.toString()), { day = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text("روز شروع") })
+                Text(stringResource(R.string.year) + " " + PersianDigits.toPersian(today.year.toString()))
+                OutlinedTextField(PersianDigits.toPersian(month.toString()), { month = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text(stringResource(R.string.fy_start_month)) })
+                OutlinedTextField(PersianDigits.toPersian(day.toString()), { day = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text(stringResource(R.string.fy_start_day)) })
                 Button(onClick = { step = 1 }, Modifier.fillMaxWidth().padding(top = 16.dp)) { Text(stringResource(R.string.next)) }
             }
             1 -> {
@@ -341,7 +359,7 @@ fun HomeScreen(state: AppUiState, onChip: (String) -> Unit, onTxn: (LedgerTransa
 }
 
 @Composable
-fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit) {
+fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit, onLongClick: () -> Unit = {}) {
     val cat = state.categories.firstOrNull { it.id == txn.categoryId }
     val acc = state.accounts.firstOrNull { it.id == txn.accountId }
     val toman = state.settings.displayToman
@@ -351,18 +369,38 @@ fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit) {
         supportingContent = { Text("${acc?.name.orEmpty()} · ${formatJalali(txn.occurredAt)} ${txn.note}") },
         trailingContent = { Text(sign + formatMoney(txn.amount, toman)) },
         leadingContent = { Icon(SymbolIcons.byKey(cat?.iconKey ?: "swap_horiz"), null) },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
     )
 }
 
 @Composable
-fun TxnListScreen(state: AppUiState, onDelete: (String) -> Unit) {
+fun TxnListScreen(
+    state: AppUiState,
+    onDelete: (String) -> Unit,
+    onLocked: () -> Unit = {},
+) {
     var q by remember { mutableStateOf("") }
+    var accountFilter by remember { mutableStateOf<String?>(null) }
+    var categoryFilter by remember { mutableStateOf<String?>(null) }
     val grouped = state.txns
-        .filter { q.isBlank() || it.note.contains(q) }
+        .filter { q.isBlank() || it.note.contains(q) || it.id.contains(q) }
+        .filter { accountFilter == null || it.accountId == accountFilter }
+        .filter { categoryFilter == null || it.categoryId == categoryFilter }
         .groupBy { Triple(it.jalaliYear, it.jalaliMonth, it.jalaliDay) }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(16.dp), label = { Text(stringResource(R.string.search)) })
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(accountFilter == null, { accountFilter = null }, { Text(stringResource(R.string.all)) })
+            state.accounts.take(6).forEach { acc ->
+                FilterChip(accountFilter == acc.id, { accountFilter = acc.id }, { Text(acc.name) })
+            }
+        }
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(categoryFilter == null, { categoryFilter = null }, { Text(stringResource(R.string.filter)) })
+            state.categories.filter { !it.isSystem || it.kind != CategoryKind.TRANSFER }.take(6).forEach { cat ->
+                FilterChip(categoryFilter == cat.id, { categoryFilter = cat.id }, { Text(cat.name) })
+            }
+        }
         if (grouped.isEmpty()) {
             Text(stringResource(R.string.empty_txns), Modifier.padding(16.dp))
         } else {
@@ -376,9 +414,11 @@ fun TxnListScreen(state: AppUiState, onDelete: (String) -> Unit) {
                         )
                     }
                     items(rows, key = { it.id }) { txn ->
-                        TxnRow(txn, state) {
-                            if (txn.transferId != null) return@TxnRow
-                        }
+                        TxnRow(txn, state, onClick = {
+                            if (txn.transferId != null) onLocked()
+                        }, onLongClick = {
+                            if (txn.transferId != null) onLocked() else onDelete(txn.id)
+                        })
                     }
                 }
             }
@@ -390,8 +430,11 @@ fun TxnListScreen(state: AppUiState, onDelete: (String) -> Unit) {
 fun ReportScreen(state: AppUiState, vm: AppViewModel, onSlice: (String) -> Unit) {
     val fy = state.fy ?: return Text(stringResource(R.string.empty_reports), Modifier.padding(16.dp))
     var month by remember { mutableIntStateOf(JalaliConverter.fromEpochMillis(System.currentTimeMillis()).month) }
+    var yearMode by remember { mutableStateOf(false) }
     val rows = state.txns.filter {
-        it.fiscalYearId == fy.id && it.jalaliMonth == month && it.transferId == null &&
+        it.fiscalYearId == fy.id &&
+            (yearMode || it.jalaliMonth == month) &&
+            it.transferId == null &&
             it.categoryId != SystemCategories.OPENING_BALANCE_ID
     }
     val byCat = rows.groupBy { it.categoryId ?: "" }.mapValues { e ->
@@ -399,14 +442,23 @@ fun ReportScreen(state: AppUiState, vm: AppViewModel, onSlice: (String) -> Unit)
     }.filter { it.value > 0L }
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("−") }
-            Text("${JalaliLabels.monthName(month)} ${PersianDigits.toPersian(fy.startJalaliYear.toString())}")
-            TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("+") }
+            FilterChip(!yearMode, { yearMode = false }, { Text(stringResource(R.string.month_mode)) })
+            FilterChip(yearMode, { yearMode = true }, { Text(stringResource(R.string.year_mode)) })
+        }
+        if (!yearMode) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("−") }
+                Text("${JalaliLabels.monthName(month)} ${PersianDigits.toPersian(fy.startJalaliYear.toString())}")
+                TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("+") }
+            }
+        } else {
+            Text(PersianDigits.toPersian(fy.label))
         }
         if (byCat.isEmpty()) {
             Text(stringResource(R.string.empty_reports))
         } else {
             Text(stringResource(R.string.pie_by_category), style = MaterialTheme.typography.titleMedium)
+            ReportCharts(byCat, rows, yearMode, onSlice)
             byCat.forEach { (id, amt) ->
                 val cat = state.categories.firstOrNull { it.id == id }
                 ListItem(
@@ -414,30 +466,45 @@ fun ReportScreen(state: AppUiState, vm: AppViewModel, onSlice: (String) -> Unit)
                     trailingContent = { Text(formatMoney(amt, state.settings.displayToman)) },
                     modifier = Modifier.clickable { onSlice(id) },
                 )
-                LinearProgressIndicator(
-                    progress = { (amt.toFloat() / byCat.values.max().toFloat()).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                )
             }
-            ReportCharts(byCat, rows)
         }
     }
 }
 
 @Composable
-private fun ReportCharts(byCat: Map<String, Long>, rows: List<LedgerTransaction>) {
+private fun ReportCharts(
+    byCat: Map<String, Long>,
+    rows: List<LedgerTransaction>,
+    yearMode: Boolean,
+    onSlice: (String) -> Unit,
+) {
+    val pieProducer = remember { PieChartModelProducer() }
     val barProducer = remember { CartesianChartModelProducer() }
-    LaunchedEffect(byCat, rows) {
-        val daily = rows.groupBy { it.jalaliDay }.toSortedMap()
+    val catKeys = remember(byCat) { byCat.keys.toList() }
+    LaunchedEffect(byCat, rows, yearMode) {
+        pieProducer.runTransaction {
+            pieSeries {
+                series(byCat.values.map { it })
+            }
+        }
+        val grouped = if (yearMode) rows.groupBy { it.jalaliMonth } else rows.groupBy { it.jalaliDay }
+        val daily = grouped.toSortedMap()
         barProducer.runTransaction {
             columnSeries {
                 series(
-                    daily.keys.map { it.toDouble() },
-                    daily.values.map { v -> v.sumOf { it.amount }.toDouble() },
+                    daily.keys.map { it },
+                    daily.values.map { v -> v.filter { it.direction == Direction.OUT }.sumOf { it.amount } },
                 )
             }
         }
     }
+    PieChartHost(
+        chart = rememberPieChart(),
+        modelProducer = pieProducer,
+        modifier = Modifier.height(200.dp).fillMaxWidth().clickable {
+            catKeys.firstOrNull()?.let(onSlice)
+        },
+    )
     Text(stringResource(R.string.daily_bars), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
     CartesianChartHost(
         rememberCartesianChart(
@@ -477,16 +544,40 @@ fun MoreScreen(open: (NavKey) -> Unit) {
 @Composable
 fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
     var name by remember { mutableStateOf("") }
-    Column(Modifier.padding(16.dp)) {
+    var type by remember { mutableStateOf(AccountType.CASH) }
+    var include by remember { mutableStateOf(true) }
+    var opening by remember { mutableStateOf("") }
+    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_account)) })
-        Button(onClick = { if (name.isNotBlank()) { vm.addAccount(name, AccountType.CASH, true, 0); name = "" } }) {
-            Text(stringResource(R.string.save))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(type == AccountType.CASH, { type = AccountType.CASH }, { Text(stringResource(R.string.type_cash)) })
+            FilterChip(type == AccountType.BANK, { type = AccountType.BANK }, { Text(stringResource(R.string.type_bank)) })
+            FilterChip(type == AccountType.CARD, { type = AccountType.CARD }, { Text(stringResource(R.string.type_card)) })
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(include, { include = it })
+            Text(stringResource(R.string.include_in_total))
+        }
+        OutlinedTextField(opening, { opening = it }, label = { Text(stringResource(R.string.opening_balance)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Button(onClick = {
+            if (name.isNotBlank()) {
+                val open = Money.parseDisplayAmount(opening, state.settings.displayToman) ?: 0L
+                vm.addAccount(name, type, include, open)
+                name = ""
+                opening = ""
+            }
+        }) { Text(stringResource(R.string.save)) }
         if (state.balances.isEmpty()) Text(stringResource(R.string.empty_accounts))
         state.balances.forEach { ab ->
+            val typeLabel = when (ab.account.type) {
+                AccountType.CASH -> stringResource(R.string.type_cash)
+                AccountType.BANK -> stringResource(R.string.type_bank)
+                AccountType.CARD -> stringResource(R.string.type_card)
+                AccountType.PERSON -> stringResource(R.string.type_person)
+            }
             ListItem(
                 headlineContent = { Text(ab.account.name) },
-                supportingContent = { Text(ab.account.type.name) },
+                supportingContent = { Text(typeLabel) },
                 trailingContent = { Text(formatMoney(ab.balanceSigned, state.settings.displayToman)) },
             )
         }
@@ -496,11 +587,13 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
 @Composable
 fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
     var name by remember { mutableStateOf("") }
-    Column(Modifier.padding(16.dp)) {
+    var amount by remember { mutableStateOf("") }
+    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_person)) })
         Button(onClick = { if (name.isNotBlank()) { vm.addPerson(name, null, null); name = "" } }) {
             Text(stringResource(R.string.save))
         }
+        OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.pay_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         if (state.people.isEmpty()) Text(stringResource(R.string.empty_people))
         state.people.forEach { p ->
             val bal = state.balances.firstOrNull { it.account.id == p.accountId }?.balanceSigned ?: 0L
@@ -510,6 +603,14 @@ fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
                 supportingContent = { Text(label) },
                 trailingContent = { Text(formatMoney(kotlin.math.abs(bal), state.settings.displayToman)) },
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                OutlinedButton(onClick = { vm.payPerson(p.accountId, amount, theyPay = false) }) {
+                    Text(stringResource(R.string.pay_them))
+                }
+                OutlinedButton(onClick = { vm.payPerson(p.accountId, amount, theyPay = true) }) {
+                    Text(stringResource(R.string.they_pay))
+                }
+            }
         }
     }
 }
@@ -520,7 +621,15 @@ fun CategoriesScreen(categories: List<Category>) {
         items(categories, key = { it.id }) { cat ->
             ListItem(
                 headlineContent = { Text(cat.name) },
-                supportingContent = { Text(cat.kind.name) },
+                supportingContent = {
+                    Text(
+                        when (cat.kind) {
+                            CategoryKind.EXPENSE -> stringResource(R.string.expense)
+                            CategoryKind.INCOME -> stringResource(R.string.income)
+                            CategoryKind.TRANSFER -> stringResource(R.string.transfer)
+                        },
+                    )
+                },
                 leadingContent = { Icon(SymbolIcons.byKey(cat.iconKey), null, tint = Color(cat.color or 0xFF000000)) },
             )
         }
@@ -536,17 +645,54 @@ fun VaultScreen(vm: AppViewModel, onSecure: (Boolean) -> Unit, onAddCard: () -> 
     val cards by vm.vaultRepo.cardsFlow.collectAsStateWithLifecycle(emptyList())
     val ibans by vm.vaultRepo.bankAccountsFlow.collectAsStateWithLifecycle(emptyList())
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        Button(onClick = onAddCard) { Text("کارت جدید") }
+        Button(onClick = onAddCard) { Text(stringResource(R.string.new_card)) }
         if (cards.isEmpty()) Text(stringResource(R.string.empty_cards))
+        val activity = LocalContext.current as MainActivity
+        val scope = rememberCoroutineScope()
         cards.forEach { c ->
             val bank = vm.vaultRepo.directory.findByBin(c.bin6)
+            var revealed by remember(c.id) { mutableStateOf<String?>(null) }
             ListItem(
-                headlineContent = { Text(CardMath.maskPan(c.last4.padStart(16, '*'))) },
+                headlineContent = { Text(revealed ?: CardMath.maskPan(c.last4.padStart(16, '*'))) },
                 supportingContent = {
-                    Text(bank?.nameFa ?: stringResource(R.string.unknown_bank) + (bank?.let { "" } ?: ""))
+                    Text(bank?.nameFa ?: stringResource(R.string.unknown_bank))
                 },
                 leadingContent = { BankLogo(bank?.logoDrawable ?: "bank_unknown") },
+                trailingContent = {
+                    TextButton(onClick = {
+                        val panId = c.panCipherId ?: return@TextButton
+                        activity.lockBeforePan {
+                            activity.lifecycleScopeLaunch {
+                                revealed = vm.vaultRepo.decryptPan(panId)
+                            }
+                        }
+                    }) { Text(stringResource(R.string.reveal_pan)) }
+                },
             )
+            if (c.rememberCvv && c.cvvCipherId != null) {
+                TextButton(onClick = {
+                    activity.lifecycleScopeLaunch {
+                        val iv = vm.vaultRepo.secretVault.cvvIv(c.cvvCipherId!!) ?: return@lifecycleScopeLaunch
+                        val cipher = vm.vaultRepo.secretVault.createCvvDecryptCipher(iv)
+                        activity.promptUnlock(
+                            crypto = BiometricPrompt.CryptoObject(cipher),
+                            onSuccess = { result ->
+                                activity.lifecycleScopeLaunch {
+                                    val unlocked = result.cryptoObject?.cipher ?: cipher
+                                    val cvv = vm.vaultRepo.secretVault.revealCvv(c.cvvCipherId!!, unlocked) ?: return@lifecycleScopeLaunch
+                                    val cm = activity.getSystemService(ClipboardManager::class.java)
+                                    cm.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.cvv), cvv))
+                                    scope.launch {
+                                        delay(30_000)
+                                        cm.setPrimaryClip(ClipData.newPlainText("", ""))
+                                    }
+                                }
+                            },
+                            onCancel = {},
+                        )
+                    }
+                }) { Text(stringResource(R.string.reveal_cvv)) }
+            }
         }
         ibans.forEach { a ->
             ListItem(headlineContent = { Text(IbanMath.formatGrouped(a.iban)) }, supportingContent = { Text(a.bankName) })
@@ -571,6 +717,8 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
     var pan by remember { mutableStateOf("") }
     var cvv by remember { mutableStateOf("") }
     var rememberCvv by remember { mutableStateOf(false) }
+    var expiryMonth by remember { mutableStateOf("1") }
+    var expiryYear by remember { mutableStateOf("1408") }
     var iban by remember { mutableStateOf("") }
     var accountNumber by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -591,6 +739,8 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
             Text(stringResource(R.string.remember_cvv))
         }
         Text(stringResource(R.string.cvv_warning), style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(expiryMonth, { expiryMonth = it }, label = { Text(stringResource(R.string.expiry)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        OutlinedTextField(expiryYear, { expiryYear = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         val acc = state.accounts.firstOrNull { it.type == AccountType.CARD } ?: state.accounts.firstOrNull()
         Button(onClick = {
             if (!CardMath.luhnValid(pan)) {
@@ -608,8 +758,8 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
                             vm.vaultRepo.saveCard(
                                 accountId = accountId,
                                 panAscii = pan,
-                                expiryMonth = 1,
-                                expiryYear = 1408,
+                                expiryMonth = expiryMonth.toIntOrNull() ?: 1,
+                                expiryYear = expiryYear.toIntOrNull() ?: 1408,
                                 holderName = null,
                                 rememberCvv = true,
                                 cvvAscii = cvv,
@@ -626,8 +776,8 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
                             vm.vaultRepo.saveCard(
                                 accountId = accountId,
                                 panAscii = pan,
-                                expiryMonth = 1,
-                                expiryYear = 1408,
+                                expiryMonth = expiryMonth.toIntOrNull() ?: 1,
+                                expiryYear = expiryYear.toIntOrNull() ?: 1408,
                                 holderName = null,
                                 rememberCvv = false,
                                 cvvAscii = null,
@@ -690,14 +840,54 @@ fun FiscalScreen(state: AppUiState, vm: AppViewModel) {
 }
 
 @Composable
-fun ArchiveScreen(state: AppUiState, vm: AppViewModel) {
+fun ArchiveScreen(state: AppUiState, vm: AppViewModel, open: (String) -> Unit) {
     val recs by vm.archiveRepo.records.collectAsStateWithLifecycle(emptyList())
-    Column(Modifier.padding(16.dp)) {
-        state.fy?.let { fy ->
-            Button(onClick = { vm.archiveYear(fy.id) }) { Text(stringResource(R.string.archive_year)) }
+    val archivedIds = recs.map { it.fiscalYearId }.toSet()
+    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+        state.fy?.let {
+            Button(onClick = { vm.closeCurrentYear() }) { Text(stringResource(R.string.close_year)) }
+        }
+        state.fiscalYears.filter { !it.isCurrent && it.id !in archivedIds }.forEach { fy ->
+            ListItem(
+                headlineContent = { Text(PersianDigits.toPersian(fy.label)) },
+                trailingContent = {
+                    Button(onClick = { vm.archiveYear(fy.id) }) { Text(stringResource(R.string.archive_year)) }
+                },
+            )
         }
         recs.forEach {
-            ListItem(headlineContent = { Text(it.fileName) }, supportingContent = { Text(it.status.name) })
+            ListItem(
+                headlineContent = { Text(it.fileName) },
+                supportingContent = { Text(stringResource(R.string.read_only)) },
+                trailingContent = {
+                    TextButton(onClick = { open(it.fileName) }) { Text(stringResource(R.string.open_archive)) }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+fun ArchiveViewerScreen(vm: AppViewModel, fileName: String) {
+    var rows by remember { mutableStateOf(emptyList<ir.mhajisoft.miniaccountant.data.archive.ArchivedTxn>()) }
+    LaunchedEffect(fileName) {
+        rows = runCatching { vm.archiveRepo.readArchivedTransactions(fileName) }.getOrDefault(emptyList())
+    }
+    Column(Modifier.padding(16.dp)) {
+        Text(fileName, style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.read_only), style = MaterialTheme.typography.bodySmall)
+        LazyColumn {
+            items(rows, key = { it.id }) { txn ->
+                ListItem(
+                    headlineContent = { Text(txn.note.ifBlank { stringResource(R.string.transfer) }) },
+                    supportingContent = {
+                        Text(
+                            PersianDigits.toPersian("${txn.jalaliYear}/${txn.jalaliMonth}/${txn.jalaliDay}"),
+                        )
+                    },
+                    trailingContent = { Text(formatMoney(txn.amount, false)) },
+                )
+            }
         }
     }
 }
@@ -720,6 +910,7 @@ fun BackupScreen(vm: AppViewModel) {
             (ctx as MainActivity).lifecycleScopeLaunch {
                 val bytes = vm.backupRepo.readFromSaf(uri)
                 vm.backupRepo.restoreEncrypted(bytes, pass)
+                vm.backupRepo.restartProcess(ctx)
             }
         }
     }
@@ -836,7 +1027,7 @@ fun ComposerSheet(
             TextButton(onClick = { pick = true }) { Text(formatJalali(at)) }
             if (mode < 2) {
                 Text(stringResource(R.string.account))
-                FlowRowWrap(state.accounts.filter { it.type != AccountType.PERSON || true }) { acc ->
+                FlowRowWrap(state.accounts.filter { it.type != AccountType.PERSON }) { acc ->
                     FilterChip(accountId == acc.id, { accountId = acc.id }, { Text(acc.name) })
                 }
                 Text(stringResource(R.string.category))
@@ -939,7 +1130,7 @@ fun PreviewCard() {
         Column(Modifier.padding(16.dp)) {
             Text(stringResource(R.string.card_form))
             OutlinedTextField("610433", {}, label = { Text(stringResource(R.string.card_number)) })
-            Text("بانک ملت")
+            Text(stringResource(R.string.bank_mellat_name))
         }
     }
 }

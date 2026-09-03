@@ -28,9 +28,13 @@ class DriveBackupClient @Inject constructor(
             !hasClient -> CloudAvailability(
                 kind,
                 available = false,
-                reasonFa = "شناسهٔ OAuth درایو تنظیم نشده. DRIVE_SERVER_CLIENT_ID را در local.properties قرار دهید.",
+                reasonFa = "شناسهٔ OAuth درایو تنظیم نشده. DRIVE_SERVER_CLIENT_ID را در local.properties قرار دهید. پشتیبان محلی همیشه کار می‌کند.",
             )
-            else -> CloudAvailability(kind, available = true, reasonFa = "")
+            else -> CloudAvailability(
+                kind,
+                available = false,
+                reasonFa = "آپلود گوگل‌درایو پس از تکمیل OAuth (Identity AuthorizationClient، scope drive.appdata) فعال می‌شود. پشتیبان محلی کار می‌کند.",
+            )
         }
     }
 
@@ -58,15 +62,15 @@ class OneDriveBackupClient @Inject constructor() : CloudBackupClient {
 
     override fun availability(): CloudAvailability {
         val hasClient = BuildConfig.ONEDRIVE_CLIENT_ID.isNotBlank()
-        return if (!hasClient) {
-            CloudAvailability(
-                kind,
-                available = false,
-                reasonFa = "ورود به وان‌درایو نیاز به ONEDRIVE_CLIENT_ID در local.properties دارد. پشتیبان محلی همیشه در دسترس است.",
-            )
-        } else {
-            CloudAvailability(kind, available = true, reasonFa = "")
-        }
+        return CloudAvailability(
+            kind,
+            available = false,
+            reasonFa = if (!hasClient) {
+                "ورود به وان‌درایو نیاز به ONEDRIVE_CLIENT_ID در local.properties دارد. پشتیبان محلی همیشه در دسترس است."
+            } else {
+                "آپلود وان‌درایو پس از ثبت برنامه در Azure (MSAL + Graph approot) فعال می‌شود. پشتیبان محلی کار می‌کند."
+            },
+        )
     }
 
     override suspend fun upload(fileName: String, bytes: ByteArray): Result<CloudSnapshot> {

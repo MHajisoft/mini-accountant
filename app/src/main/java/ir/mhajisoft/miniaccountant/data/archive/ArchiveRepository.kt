@@ -50,19 +50,22 @@ class ArchiveRepository @Inject constructor(
 
     suspend fun archiveClosedYear(fiscalYearId: String): ArchiveRecord = withContext(Dispatchers.IO) {
         val fy = fiscalYears.get(fiscalYearId) ?: error("missing fy")
+        require(!fy.isCurrent) { "سال جاری را ابتدا ببندید" }
         val now = System.currentTimeMillis()
-        val balances = ledger.homeBalancesNow()
-        snapshots.upsertAll(
-            balances.map { ab ->
-                BalanceSnapshotEntity(
-                    id = UUID.randomUUID().toString(),
-                    fiscalYearId = fiscalYearId,
-                    accountId = ab.account.id,
-                    amountSigned = ab.balanceSigned,
-                    capturedAt = now,
-                )
-            },
-        )
+        if (snapshots.forYear(fiscalYearId).isEmpty()) {
+            val balances = ledger.balancesForYear(fiscalYearId)
+            snapshots.upsertAll(
+                balances.map { ab ->
+                    BalanceSnapshotEntity(
+                        id = UUID.randomUUID().toString(),
+                        fiscalYearId = fiscalYearId,
+                        accountId = ab.account.id,
+                        amountSigned = ab.balanceSigned,
+                        capturedAt = now,
+                    )
+                },
+            )
+        }
         checkpoint()
         val src = context.getDatabasePath(MiniAccountantDatabase.FILE_NAME)
         val raw = File(context.cacheDir, "fy-${fy.label}.db")
@@ -119,6 +122,38 @@ class ArchiveRepository @Inject constructor(
         dest
     }
 
+    /**
+     * Read-only viewer for an archived FY. Opens a dedicated SQLite connection
+     * (equivalent to ATTACH of `archives/fy-XXXX.db.gz`) with query_only=ON.
+     */
+    suspend fun readArchivedTransactions(fileName: String): List<ArchivedTxn> = withContext(Dispatchers.IO) {
+        val dest = openArchiveFile(fileName)
+        val driver = BundledSQLiteDriver()
+        val conn = driver.open(dest.absolutePath)
+        conn.execSQL("PRAGMA query_only = ON")
+        val out = mutableListOf<ArchivedTxn>()
+        conn.prepare(
+            "SELECT id, accountId, amount, direction, note, occurredAt, jalaliYear, jalaliMonth, jalaliDay, categoryId FROM transactions ORDER BY occurredAt DESC",
+        ).use { stmt ->
+            while (stmt.step()) {
+                out += ArchivedTxn(
+                    id = stmt.getText(0),
+                    accountId = stmt.getText(1),
+                    amount = stmt.getLong(2),
+                    direction = stmt.getText(3),
+                    note = stmt.getText(4),
+                    occurredAt = stmt.getLong(5),
+                    jalaliYear = stmt.getInt(6),
+                    jalaliMonth = stmt.getInt(7),
+                    jalaliDay = stmt.getInt(8),
+                    categoryId = if (stmt.isNull(9)) null else stmt.getText(9),
+                )
+            }
+        }
+        conn.close()
+        out
+    }
+
     private suspend fun checkpoint() {
         db.useWriterConnection { conn ->
             conn.usePrepared("PRAGMA wal_checkpoint(FULL)") { stmt ->
@@ -140,3 +175,16 @@ class ArchiveRepository @Inject constructor(
     private fun sha256(data: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
 }
+
+data class ArchivedTxn(
+    val id: String,
+    val accountId: String,
+    val amount: Long,
+    val direction: String,
+    val note: String,
+    val occurredAt: Long,
+    val jalaliYear: Int,
+    val jalaliMonth: Int,
+    val jalaliDay: Int,
+    val categoryId: String?,
+)

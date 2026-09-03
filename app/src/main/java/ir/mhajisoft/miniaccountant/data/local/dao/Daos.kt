@@ -91,6 +91,9 @@ interface FiscalYearDao {
 
     @Query("UPDATE fiscal_years SET closedAt = :closedAt WHERE id = :id")
     suspend fun close(id: String, closedAt: Long)
+
+    @Query("UPDATE fiscal_years SET isCurrent = 0, closedAt = :closedAt WHERE id = :id")
+    suspend fun closeAndDemote(id: String, closedAt: Long)
 }
 
 @Dao

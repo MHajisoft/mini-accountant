@@ -108,6 +108,13 @@ class BackupRepository @Inject constructor(
         dest.writeBytes(sqlite)
     }
 
+    fun restartProcess(context: Context) {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        context.startActivity(intent)
+        Runtime.getRuntime().exit(0)
+    }
+
     suspend fun writeToSaf(uri: Uri, bytes: ByteArray) = withContext(Dispatchers.IO) {
         context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
             ?: error("cannot write")

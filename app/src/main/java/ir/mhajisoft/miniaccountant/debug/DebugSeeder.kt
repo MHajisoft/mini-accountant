@@ -3,7 +3,6 @@ package ir.mhajisoft.miniaccountant.debug
 import ir.mhajisoft.miniaccountant.BuildConfig
 import ir.mhajisoft.miniaccountant.data.local.datastore.SettingsDataStore
 import ir.mhajisoft.miniaccountant.data.repository.LedgerRepository
-import ir.mhajisoft.miniaccountant.domain.ledger.SystemCategories
 import ir.mhajisoft.miniaccountant.domain.model.Direction
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -40,6 +39,5 @@ class DebugSeeder @Inject constructor(
             occurredAt = now - 3 * 86_400_000L,
         )
         settings.markSampleSeeded()
-        SystemCategories.FEE_ID
     }
 }
