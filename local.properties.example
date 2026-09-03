@@ -1,0 +1,13 @@
+## Copy this file to local.properties and fill in values for your machine.
+## local.properties is gitignored and must never be committed.
+
+sdk.dir=/Users/YOU/Library/Android/sdk
+
+# Optional Google Drive (drive.appdata only). Leave blank to keep Drive disabled
+# until you register an OAuth client. The app never fakes a successful upload.
+DRIVE_SERVER_CLIENT_ID=
+
+# Optional Microsoft identity / OneDrive app-folder (approot). Leave blank to
+# keep OneDrive disabled; UI still shows setup copy.
+ONEDRIVE_CLIENT_ID=
+ONEDRIVE_SIGNATURE_HASH=
