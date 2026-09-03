@@ -234,5 +234,19 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch { runCatching { ledger.updateTransaction(txn) } }
     }
 
+    fun setOpening(accountId: String, amountDisplay: String) {
+        viewModelScope.launch {
+            val s = state.value.settings
+            val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: 0L
+            ledger.setOpeningBalance(accountId, amount, replaceTxn = true)
+        }
+    }
+
     val jalaliToday get() = JalaliConverter.fromEpochMillis(System.currentTimeMillis())
+
+    val openings = ledger.openingsFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        emptyMap(),
+    )
 }

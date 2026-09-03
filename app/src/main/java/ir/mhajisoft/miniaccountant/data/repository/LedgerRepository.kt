@@ -69,6 +69,12 @@ class LedgerRepository @Inject constructor(
     val allTxnsFlow: Flow<List<LedgerTransaction>> =
         txns.observeAll().map { list -> list.map { it.toDomain() } }
     val peopleFlow: Flow<List<Person>> = people.observeAll().map { list -> list.map { it.toDomain() } }
+    val openingsFlow: Flow<Map<String, Long>> = combine(
+        openings.observeAll(),
+        fiscalYears.observeCurrent(),
+    ) { rows, fy ->
+        rows.filter { fy != null && it.fiscalYearId == fy.id }.associate { it.accountId to it.amountSigned }
+    }
 
     val homeBalancesFlow: Flow<List<AccountBalance>> = combine(
         accounts.observeActive(),

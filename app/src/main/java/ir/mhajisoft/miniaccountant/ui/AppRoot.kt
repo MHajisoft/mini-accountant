@@ -873,12 +873,29 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
 fun FiscalScreen(state: AppUiState, vm: AppViewModel) {
     val fy = state.fy
     var confirm by remember { mutableStateOf(false) }
-    Column(Modifier.padding(16.dp)) {
+    val openings by vm.openings.collectAsStateWithLifecycle()
+    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.fiscal_year), style = MaterialTheme.typography.titleLarge)
         fy?.let {
             Text("${PersianDigits.toPersian(it.startJalaliYear.toString())}/${PersianDigits.toPersian(it.startJalaliMonth.toString().padStart(2,'0'))}/${PersianDigits.toPersian(it.startJalaliDay.toString().padStart(2,'0'))} — ${PersianDigits.toPersian(it.endJalaliYear.toString())}/${PersianDigits.toPersian(it.endJalaliMonth.toString().padStart(2,'0'))}/${PersianDigits.toPersian(it.endJalaliDay.toString().padStart(2,'0'))}")
         }
         Button(onClick = { confirm = true }) { Text(stringResource(R.string.fy_reset_farvardin)) }
+        Text(stringResource(R.string.opening_balance), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+        state.accounts.filter { it.type != AccountType.PERSON }.forEach { acc ->
+            var text by remember(acc.id, openings[acc.id], state.settings.displayToman) {
+                val raw = openings[acc.id] ?: 0L
+                mutableStateOf(PersianDigits.toPersian(Money.toDisplayUnit(raw, state.settings.displayToman).toString()))
+            }
+            OutlinedTextField(
+                text,
+                { text = it },
+                label = { Text(acc.name) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                trailingIcon = {
+                    TextButton(onClick = { vm.setOpening(acc.id, text) }) { Text(stringResource(R.string.save)) }
+                },
+            )
+        }
         if (confirm) {
             AlertDialog(
                 onDismissRequest = { confirm = false },
