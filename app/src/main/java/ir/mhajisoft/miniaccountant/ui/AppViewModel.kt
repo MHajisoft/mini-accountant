@@ -17,6 +17,7 @@ import ir.mhajisoft.miniaccountant.domain.model.Account
 import ir.mhajisoft.miniaccountant.domain.model.AccountType
 import ir.mhajisoft.miniaccountant.domain.model.AppLockSettings
 import ir.mhajisoft.miniaccountant.domain.model.Category
+import ir.mhajisoft.miniaccountant.domain.model.CategoryKind
 import ir.mhajisoft.miniaccountant.domain.model.Direction
 import ir.mhajisoft.miniaccountant.domain.model.FiscalYear
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
@@ -190,6 +191,36 @@ class AppViewModel @Inject constructor(
             )
             ledger.upsertAccount(acc)
             if (opening != 0L) ledger.setOpeningBalance(acc.id, opening, true)
+        }
+    }
+
+    fun addCustomCategory(name: String, iconKey: String, color: Long, kind: CategoryKind) {
+        viewModelScope.launch { runCatching { ledger.addCustomCategory(name, iconKey, color, kind) } }
+    }
+
+    fun deleteCustomCategory(id: String, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching { ledger.deleteCustomCategory(id) }
+                .onFailure { onError(it.message ?: "error") }
+        }
+    }
+
+    fun archiveAccount(id: String, archived: Boolean) {
+        viewModelScope.launch { ledger.archiveAccount(id, archived) }
+    }
+
+    fun updateAccount(account: Account) {
+        viewModelScope.launch { ledger.upsertAccount(account.copy(updatedAt = System.currentTimeMillis())) }
+    }
+
+    fun deleteTxnOrTransfer(txn: LedgerTransaction) {
+        viewModelScope.launch {
+            val transferId = txn.transferId
+            if (transferId != null) {
+                runCatching { ledger.deleteTransfer(transferId) }
+            } else {
+                runCatching { ledger.deleteTransaction(txn.id) }
+            }
         }
     }
 

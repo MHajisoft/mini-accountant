@@ -30,6 +30,13 @@ object SymbolIcons {
     val Category = roundedSymbol("category") { category() }
     val Card = roundedSymbol("card") { card() }
 
+    val customIconKeys = listOf(
+        "restaurant", "directions_car", "home", "bolt", "health_and_safety",
+        "school", "checkroom", "sports_esports", "shopping_bag", "flight",
+        "family_restroom", "policy", "volunteer_activism", "handyman",
+        "more_horiz", "payments", "storefront", "card_giftcard", "trending_up",
+    )
+
     fun byKey(key: String): ImageVector = when (key) {
         "restaurant", "local_dining" -> roundedSymbol("restaurant") { dining() }
         "directions_car" -> roundedSymbol("car") { car() }

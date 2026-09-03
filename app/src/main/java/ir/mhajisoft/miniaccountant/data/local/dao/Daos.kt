@@ -62,6 +62,9 @@ interface CategoryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(entities: List<CategoryEntity>)
 
+    @Delete
+    suspend fun delete(entity: CategoryEntity)
+
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 }
