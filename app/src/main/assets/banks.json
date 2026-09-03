@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "comment": "Iranian bank BIN (6-digit) and Sheba (3-digit) directory. Sources: public BIN tables on pishkhanak.com and jadvalino.com (and CBI Sheba bank-code lists). Not an official trademark dataset; logos in res/drawable are original geometric marks, not scanned bank artwork. Verify before production use.",
+  "sources": [
+    "https://pishkhanak.com (public BIN tables)",
+    "https://jadvalino.com (public Sheba/BIN tables)",
+    "CBI IBAN bank identifier digits 5-7"
+  ],
+  "unknown": {
+    "nameFa": "بانک شناسایی نشد",
+    "nameEn": "Unknown bank",
+    "logoDrawable": "bank_unknown"
+  },
+  "banks": [
+    {
+      "id": "melli",
+      "nameFa": "بانک ملی ایران",
+      "nameEn": "Bank Melli Iran",
+      "shebaCode": "017",
+      "bins": ["603799", "170019"],
+      "logoDrawable": "bank_melli"
+    },
+    {
+      "id": "mellat",
+      "nameFa": "بانک ملت",
+      "nameEn": "Bank Mellat",
+      "shebaCode": "012",
+      "bins": ["610433", "991975"],
+      "logoDrawable": "bank_mellat"
+    },
+    {
+      "id": "saderat",
+      "nameFa": "بانک صادرات ایران",
+      "nameEn": "Bank Saderat Iran",
+      "shebaCode": "019",
+      "bins": ["603769", "903769"],
+      "logoDrawable": "bank_saderat"
+    },
+    {
+      "id": "tejarat",
+      "nameFa": "بانک تجارت",
+      "nameEn": "Bank Tejarat",
+      "shebaCode": "018",
+      "bins": ["627353", "585983"],
+      "logoDrawable": "bank_tejarat"
+    },
+    {
+      "id": "pasargad",
+      "nameFa": "بانک پاسارگاد",
+      "nameEn": "Pasargad Bank",
+      "shebaCode": "057",
+      "bins": ["502229", "639347"],
+      "logoDrawable": "bank_pasargad"
+    },
+    {
+      "id": "saman",
+      "nameFa": "بانک سامان",
+      "nameEn": "Saman Bank",
+      "shebaCode": "056",
+      "bins": ["621986"],
+      "logoDrawable": "bank_saman"
+    },
+    {
+      "id": "parsian",
+      "nameFa": "بانک پارسیان",
+      "nameEn": "Parsian Bank",
+      "shebaCode": "054",
+      "bins": ["622106", "627884", "639194"],
+      "logoDrawable": "bank_parsian"
+    },
+    {
+      "id": "keshavarzi",
+      "nameFa": "بانک کشاورزی",
+      "nameEn": "Bank Keshavarzi",
+      "shebaCode": "016",
+      "bins": ["603770", "639217"],
+      "logoDrawable": "bank_keshavarzi"
+    },
+    {
+      "id": "refah",
+      "nameFa": "بانک رفاه کارگران",
+      "nameEn": "Refah Bank",
+      "shebaCode": "013",
+      "bins": ["589463"],
+      "logoDrawable": "bank_refah"
+    },
+    {
+      "id": "maskan",
+      "nameFa": "بانک مسکن",
+      "nameEn": "Bank Maskan",
+      "shebaCode": "014",
+      "bins": ["628023"],
+      "logoDrawable": "bank_maskan"
+    },
+    {
+      "id": "shahr",
+      "nameFa": "بانک شهر",
+      "nameEn": "Shahr Bank",
+      "shebaCode": "061",
+      "bins": ["502806", "504706"],
+      "logoDrawable": "bank_shahr"
+    },
+    {
+      "id": "sina",
+      "nameFa": "بانک سینا",
+      "nameEn": "Sina Bank",
+      "shebaCode": "059",
+      "bins": ["639346"],
+      "logoDrawable": "bank_sina"
+    },
+    {
+      "id": "en",
+      "nameFa": "بانک اقتصاد نوین",
+      "nameEn": "Eghtesad Novin Bank",
+      "shebaCode": "055",
+      "bins": ["627412"],
+      "logoDrawable": "bank_en"
+    },
+    {
+      "id": "ayandeh",
+      "nameFa": "بانک آینده",
+      "nameEn": "Ayandeh Bank",
+      "shebaCode": "062",
+      "bins": ["636214"],
+      "logoDrawable": "bank_ayandeh"
+    },
+    {
+      "id": "iranzamin",
+      "nameFa": "بانک ایران زمین",
+      "nameEn": "Iran Zamin Bank",
+      "shebaCode": "069",
+      "bins": ["505785"],
+      "logoDrawable": "bank_iranzamin"
+    },
+    {
+      "id": "middleeast",
+      "nameFa": "بانک خاورمیانه",
+      "nameEn": "Middle East Bank",
+      "shebaCode": "078",
+      "bins": ["585947"],
+      "logoDrawable": "bank_middleeast"
+    },
+    {
+      "id": "gardeshgari",
+      "nameFa": "بانک گردشگری",
+      "nameEn": "Tourism Bank",
+      "shebaCode": "064",
+      "bins": ["505416", "505426"],
+      "logoDrawable": "bank_gardeshgari"
+    },
+    {
+      "id": "sepah",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["589210"],
+      "logoDrawable": "bank_sepah"
+    },
+    {
+      "id": "ansar",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["627381"],
+      "logoDrawable": "bank_sepah",
+      "mergedInto": "sepah",
+      "formerNameFa": "انصار سابق"
+    },
+    {
+      "id": "qavamin",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["639599"],
+      "logoDrawable": "bank_sepah",
+      "mergedInto": "sepah",
+      "formerNameFa": "قوامین سابق"
+    },
+    {
+      "id": "hekmat",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["636949"],
+      "logoDrawable": "bank_sepah",
+      "mergedInto": "sepah",
+      "formerNameFa": "حکمت ایرانیان سابق"
+    },
+    {
+      "id": "mehreqtesad",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["639370"],
+      "logoDrawable": "bank_sepah",
+      "mergedInto": "sepah",
+      "formerNameFa": "مهر اقتصاد سابق"
+    },
+    {
+      "id": "kosar",
+      "nameFa": "بانک سپه",
+      "nameEn": "Bank Sepah",
+      "shebaCode": "015",
+      "bins": ["505801"],
+      "logoDrawable": "bank_sepah",
+      "mergedInto": "sepah",
+      "formerNameFa": "کوثر سابق"
+    },
+    {
+      "id": "noor",
+      "nameFa": "بانک ملی ایران",
+      "nameEn": "Bank Melli Iran",
+      "shebaCode": "017",
+      "bins": ["507677"],
+      "logoDrawable": "bank_melli",
+      "mergedInto": "melli",
+      "formerNameFa": "مؤسسه نور سابق"
+    },
+    {
+      "id": "cbi",
+      "nameFa": "بانک مرکزی ایران",
+      "nameEn": "Central Bank of Iran",
+      "shebaCode": "010",
+      "bins": ["636795"],
+      "logoDrawable": "bank_cbi"
+    },
+    {
+      "id": "post",
+      "nameFa": "پست بانک ایران",
+      "nameEn": "Post Bank of Iran",
+      "shebaCode": "021",
+      "bins": ["627760"],
+      "logoDrawable": "bank_post"
+    },
+    {
+      "id": "toseetaavon",
+      "nameFa": "بانک توسعه تعاون",
+      "nameEn": "Tosee Taavon Bank",
+      "shebaCode": "022",
+      "bins": ["502908"],
+      "logoDrawable": "bank_toseetaavon"
+    },
+    {
+      "id": "toseesaderat",
+      "nameFa": "بانک توسعه صادرات ایران",
+      "nameEn": "Export Development Bank of Iran",
+      "shebaCode": "020",
+      "bins": ["627648", "207177"],
+      "logoDrawable": "bank_toseesaderat"
+    },
+    {
+      "id": "sanat",
+      "nameFa": "بانک صنعت و معدن",
+      "nameEn": "Bank of Industry and Mine",
+      "shebaCode": "011",
+      "bins": ["627961"],
+      "logoDrawable": "bank_sanat"
+    },
+    {
+      "id": "mehriran",
+      "nameFa": "بانک مهر ایران",
+      "nameEn": "Mehr Iran Bank",
+      "shebaCode": "060",
+      "bins": ["606373"],
+      "logoDrawable": "bank_mehriran"
+    },
+    {
+      "id": "resalat",
+      "nameFa": "بانک رسالت",
+      "nameEn": "Resalat Bank",
+      "shebaCode": "070",
+      "bins": ["504172"],
+      "logoDrawable": "bank_resalat"
+    },
+    {
+      "id": "karafarin",
+      "nameFa": "بانک کارآفرین",
+      "nameEn": "Karafarin Bank",
+      "shebaCode": "053",
+      "bins": ["627488", "502910"],
+      "logoDrawable": "bank_karafarin"
+    },
+    {
+      "id": "sarmayeh",
+      "nameFa": "بانک سرمایه",
+      "nameEn": "Sarmayeh Bank",
+      "shebaCode": "058",
+      "bins": ["639607"],
+      "logoDrawable": "bank_sarmayeh"
+    },
+    {
+      "id": "dey",
+      "nameFa": "بانک دی",
+      "nameEn": "Dey Bank",
+      "shebaCode": "066",
+      "bins": ["502938"],
+      "logoDrawable": "bank_dey"
+    },
+    {
+      "id": "melal",
+      "nameFa": "مؤسسه اعتباری ملل",
+      "nameEn": "Melal Credit Institution",
+      "shebaCode": "075",
+      "bins": ["606256"],
+      "logoDrawable": "bank_melal"
+    },
+    {
+      "id": "askariyeh",
+      "nameFa": "مؤسسه اعتباری ملل",
+      "nameEn": "Melal Credit Institution",
+      "shebaCode": "075",
+      "bins": ["628157"],
+      "logoDrawable": "bank_melal",
+      "mergedInto": "melal",
+      "formerNameFa": "عسکریه سابق"
+    },
+    {
+      "id": "iranvenezuela",
+      "nameFa": "بانک ایران و ونزوئلا",
+      "nameEn": "Iran Venezuela Bank",
+      "shebaCode": "095",
+      "bins": ["581874"],
+      "logoDrawable": "bank_iranvenezuela"
+    }
+  ]
+}
