@@ -137,4 +137,22 @@
     <string name="confirm_delete">این تراکنش حذف شود؟</string>
     <string name="confirm_delete_transfer">هر دو طرف این جابه‌جایی حذف می‌شوند. ادامه می‌دهید؟</string>
     <string name="add_transfer_hint">نگه‌داشتن + برای جابه‌جایی</string>
+    <string name="composer_need_account">حساب نقد یا بانکی ندارید. از «بیشتر» یک حساب بسازید.</string>
+    <string name="empty_people_body">نام را وارد کنید تا کیف‌پول این شخص ساخته شود. بعداً می‌توانید تلفن، یادداشت، کارت و شبا را کامل کنید.</string>
+    <string name="person_missing">این شخص پیدا نشد.</string>
+    <string name="person_profile">پرونده شخص</string>
+    <string name="person_info">مشخصات</string>
+    <string name="they_owe_you">این شخص به شما بدهکار است</string>
+    <string name="you_owe_them">شما به این شخص بدهکارید</string>
+    <string name="settle">تسویه</string>
+    <string name="linked_cards">کارت‌های متصل</string>
+    <string name="linked_iban">شباهای متصل</string>
+    <string name="empty_linked_cards">کارتی به این شخص وصل نشده. از «کارت و شبا» اضافه کنید.</string>
+    <string name="empty_linked_iban">شبایی به این شخص وصل نشده.</string>
+    <string name="empty_person_txns">هنوز تراکنشی با این شخص ثبت نشده.</string>
+    <string name="empty_home_title">دفتر هنوز خالی است</string>
+    <string name="empty_txns_title">تراکنشی نیست</string>
+    <string name="empty_reports_title">گزارشی برای این دوره نیست</string>
+    <string name="empty_reports_body">با ثبت هزینه یا درآمد، نمودار دسته‌ها اینجا ساخته می‌شود.</string>
+    <string name="empty_accounts_body">از فرم بالا یک حساب نقد، بانک یا کارت بسازید.</string>
 </resources>

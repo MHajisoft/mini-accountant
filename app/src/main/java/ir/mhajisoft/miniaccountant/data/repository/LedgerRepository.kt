@@ -19,6 +19,7 @@ import ir.mhajisoft.miniaccountant.domain.jalali.JalaliYmd
 import ir.mhajisoft.miniaccountant.domain.ledger.BalanceMath
 import ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog
 import ir.mhajisoft.miniaccountant.domain.ledger.CategoryRules
+import ir.mhajisoft.miniaccountant.domain.ledger.ComposerRules
 import ir.mhajisoft.miniaccountant.domain.ledger.OpeningBalancePoster
 import ir.mhajisoft.miniaccountant.domain.ledger.SystemCategories
 import ir.mhajisoft.miniaccountant.domain.ledger.TransferPoster
@@ -224,7 +225,7 @@ class LedgerRepository @Inject constructor(
         occurredAt: Long,
         note: String,
     ): Transfer {
-        val fy = currentFiscalYear() ?: error("no fiscal year")
+        val fy = currentFiscalYear() ?: error(ComposerRules.ERR_NO_FY)
         val posting = TransferPoster.post(
             fromAccountId = fromAccountId,
             toAccountId = toAccountId,
@@ -320,6 +321,12 @@ class LedgerRepository @Inject constructor(
         txns.upsertAll(result.updated.map { it.toEntity() })
     }
 
+    suspend fun updatePersonProfile(person: Person) {
+        people.upsert(person.toEntity())
+        val acc = accounts.get(person.accountId) ?: return
+        accounts.update(acc.copy(name = person.name, updatedAt = System.currentTimeMillis()))
+    }
+
     suspend fun newExpenseOrIncome(
         accountId: String,
         categoryId: String,
@@ -329,7 +336,9 @@ class LedgerRepository @Inject constructor(
         occurredAt: Long,
         personId: String? = null,
     ): LedgerTransaction {
-        val fy = currentFiscalYear() ?: error("no fiscal year")
+        require(accountId.isNotBlank()) { ComposerRules.ERR_PICK_ACCOUNT }
+        accounts.get(accountId) ?: error(ComposerRules.ERR_ACCOUNT_GONE)
+        val fy = currentFiscalYear() ?: error(ComposerRules.ERR_NO_FY)
         val ymd = JalaliConverter.fromEpochMillis(occurredAt)
         val txn = LedgerTransaction(
             id = UUID.randomUUID().toString(),

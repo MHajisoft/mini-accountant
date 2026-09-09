@@ -21,6 +21,7 @@ import ir.mhajisoft.miniaccountant.domain.model.CategoryKind
 import ir.mhajisoft.miniaccountant.domain.model.Direction
 import ir.mhajisoft.miniaccountant.domain.model.FiscalYear
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
+import ir.mhajisoft.miniaccountant.domain.ledger.ComposerRules
 import ir.mhajisoft.miniaccountant.domain.model.Person
 import ir.mhajisoft.miniaccountant.domain.money.Money
 import kotlinx.coroutines.flow.SharingStarted
@@ -144,28 +145,88 @@ class AppViewModel @Inject constructor(
         note: String,
         occurredAt: Long,
         income: Boolean,
+        onError: (String) -> Unit = {},
     ) {
         viewModelScope.launch {
-            val s = state.value.settings
-            val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: return@launch
-            ledger.newExpenseOrIncome(
-                accountId = accountId,
-                categoryId = categoryId,
-                amount = amount,
-                direction = if (income) Direction.IN else Direction.OUT,
-                note = note,
-                occurredAt = occurredAt,
+            val ui = state.value
+            val resolved = ComposerRules.resolveLedgerAccountId(accountId, ui.accounts)
+            val err = ComposerRules.validate(
+                ComposerRules.Draft(
+                    accountId = resolved.orEmpty(),
+                    categoryId = categoryId,
+                    amountDisplay = amountDisplay,
+                    toman = ui.settings.displayToman,
+                    accounts = ui.accounts,
+                    categories = ui.categories,
+                    fiscalYear = ui.fy,
+                ),
             )
-            settingsStore.setLastUsed(accountId, categoryId, expense = !income)
+            if (err != null) {
+                onError(err)
+                return@launch
+            }
+            val ledgerAccountId = resolved ?: run {
+                onError(ComposerRules.ERR_PICK_ACCOUNT)
+                return@launch
+            }
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
+            runCatching {
+                ledger.newExpenseOrIncome(
+                    accountId = ledgerAccountId,
+                    categoryId = categoryId,
+                    amount = amount,
+                    direction = if (income) Direction.IN else Direction.OUT,
+                    note = note,
+                    occurredAt = occurredAt,
+                )
+            }.onSuccess {
+                settingsStore.setLastUsed(ledgerAccountId, categoryId, expense = !income)
+            }.onFailure { onError(mapWriteError(it)) }
         }
     }
 
-    fun saveTransfer(from: String, to: String, amountDisplay: String, feeDisplay: String, note: String, at: Long) {
+    fun saveTransfer(
+        from: String,
+        to: String,
+        amountDisplay: String,
+        feeDisplay: String,
+        note: String,
+        at: Long,
+        onError: (String) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            val s = state.value.settings
-            val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: return@launch
-            val fee = Money.parseDisplayAmount(feeDisplay, s.displayToman)
-            ledger.postTransfer(from, to, amount, fee, at, note)
+            val ui = state.value
+            val err = ComposerRules.validate(
+                ComposerRules.Draft(
+                    accountId = from,
+                    categoryId = "",
+                    amountDisplay = amountDisplay,
+                    toman = ui.settings.displayToman,
+                    accounts = ui.accounts,
+                    categories = ui.categories,
+                    fiscalYear = ui.fy,
+                    toAccountId = to,
+                    transfer = true,
+                ),
+            )
+            if (err != null) {
+                onError(err)
+                return@launch
+            }
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
+            val fee = Money.parseDisplayAmount(feeDisplay, ui.settings.displayToman)
+            runCatching { ledger.postTransfer(from, to, amount, fee, at, note) }
+                .onFailure { onError(mapWriteError(it)) }
+        }
+    }
+
+    private fun mapWriteError(t: Throwable): String {
+        val msg = t.message.orEmpty()
+        return when {
+            msg.contains("FOREIGN", ignoreCase = true) -> ComposerRules.ERR_ACCOUNT_GONE
+            msg.contains("fiscal", ignoreCase = true) -> ComposerRules.ERR_NO_FY
+            msg.any { it in '\u0600'..'\u06FF' } -> msg
+            else -> ComposerRules.ERR_NO_FY
         }
     }
 
@@ -228,6 +289,10 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch { ledger.createPerson(name, phone, note, 0xFF6A1B9A) }
     }
 
+    fun updatePerson(person: Person) {
+        viewModelScope.launch { ledger.updatePersonProfile(person) }
+    }
+
     fun setToman(v: Boolean) { viewModelScope.launch { settingsStore.setDisplayToman(v) } }
     fun setLock(s: AppLockSettings) { viewModelScope.launch { settingsStore.setLock(s) } }
     fun setDefaultAccount(id: String) { viewModelScope.launch { settingsStore.setDefaultAccount(id) } }
@@ -246,18 +311,37 @@ class AppViewModel @Inject constructor(
 
     fun closeCurrentYear() { viewModelScope.launch { ledger.closeCurrentAndStartNext(System.currentTimeMillis()) } }
 
-    fun payPerson(personAccountId: String, amountDisplay: String, theyPay: Boolean) {
+    fun payPerson(personAccountId: String, amountDisplay: String, theyPay: Boolean, onError: (String) -> Unit = {}) {
         viewModelScope.launch {
-            val s = state.value.settings
-            val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: return@launch
-            val other = s.defaultAccountId
-                ?: state.value.accounts.firstOrNull { it.type != AccountType.PERSON }?.id
-                ?: return@launch
-            if (theyPay) {
-                ledger.postTransfer(personAccountId, other, amount, null, System.currentTimeMillis(), "")
-            } else {
-                ledger.postTransfer(other, personAccountId, amount, null, System.currentTimeMillis(), "")
+            val ui = state.value
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman)
+            if (amount == null) {
+                onError(ComposerRules.ERR_AMOUNT)
+                return@launch
             }
+            if (amount <= 0L) {
+                onError(ComposerRules.ERR_AMOUNT_ZERO)
+                return@launch
+            }
+            val other = ComposerRules.resolveLedgerAccountId(
+                ui.settings.defaultAccountId.orEmpty(),
+                ui.accounts.filter { it.type != AccountType.PERSON },
+            )
+            if (other == null) {
+                onError(ComposerRules.ERR_NO_ACCOUNT)
+                return@launch
+            }
+            if (other == personAccountId) {
+                onError(ComposerRules.ERR_SAME_ACCOUNTS)
+                return@launch
+            }
+            runCatching {
+                if (theyPay) {
+                    ledger.postTransfer(personAccountId, other, amount, null, System.currentTimeMillis(), "")
+                } else {
+                    ledger.postTransfer(other, personAccountId, amount, null, System.currentTimeMillis(), "")
+                }
+            }.onFailure { onError(mapWriteError(it)) }
         }
     }
 

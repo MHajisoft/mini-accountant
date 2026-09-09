@@ -14,8 +14,12 @@ import ir.mhajisoft.miniaccountant.domain.jalali.BirashkAlgorithm
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliConverter
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliYmd
 import ir.mhajisoft.miniaccountant.domain.ledger.BalanceMath
+import ir.mhajisoft.miniaccountant.domain.ledger.CategoryCatalog
+import ir.mhajisoft.miniaccountant.domain.ledger.ComposerRules
 import ir.mhajisoft.miniaccountant.domain.ledger.SystemCategories
 import ir.mhajisoft.miniaccountant.domain.ledger.TransferPoster
+import ir.mhajisoft.miniaccountant.domain.model.Account
+import ir.mhajisoft.miniaccountant.domain.model.AccountType
 import ir.mhajisoft.miniaccountant.domain.model.Direction
 import ir.mhajisoft.miniaccountant.domain.model.FiscalYear
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
@@ -252,5 +256,119 @@ class CategoryRulesTest {
             color = 0xFF78909C,
             kind = ir.mhajisoft.miniaccountant.domain.model.CategoryKind.TRANSFER,
         )
+    }
+}
+
+class ComposerRulesTest {
+    private val cash = Account(
+        id = "cash",
+        name = "نقد",
+        type = AccountType.CASH,
+        color = 0xFF0F766E,
+        sortOrder = 0,
+        createdAt = 0,
+        updatedAt = 0,
+    )
+    private val bank = Account(
+        id = "bank",
+        name = "بانک",
+        type = AccountType.BANK,
+        color = 0xFF1565C0,
+        sortOrder = 1,
+        createdAt = 0,
+        updatedAt = 0,
+    )
+    private val cats = CategoryCatalog.systemCategories()
+    private val food = cats.first { it.id == "sys-food" }
+    private val fy = FiscalYear(
+        id = "fy",
+        label = "1405",
+        startJalaliYear = 1405,
+        startJalaliMonth = 1,
+        startJalaliDay = 1,
+        endJalaliYear = 1405,
+        endJalaliMonth = 12,
+        endJalaliDay = 29,
+        startEpoch = 0,
+        endEpoch = 1,
+        isCurrent = true,
+        closedAt = null,
+    )
+
+    private fun draft(
+        accountId: String = cash.id,
+        categoryId: String = food.id,
+        amount: String = "120000",
+        accounts: List<Account> = listOf(cash),
+        fy: FiscalYear? = this.fy,
+        toAccountId: String = "",
+        transfer: Boolean = false,
+    ) = ComposerRules.Draft(
+        accountId = accountId,
+        categoryId = categoryId,
+        amountDisplay = amount,
+        toman = false,
+        accounts = accounts,
+        categories = cats,
+        fiscalYear = fy,
+        toAccountId = toAccountId,
+        transfer = transfer,
+    )
+
+    @Test
+    fun expenseWithOneAccountDoesNotFail() {
+        assertThat(ComposerRules.validate(draft())).isNull()
+    }
+
+    @Test
+    fun emptyAccountsShowsPersianError() {
+        assertThat(ComposerRules.validate(draft(accounts = emptyList())))
+            .isEqualTo(ComposerRules.ERR_NO_ACCOUNT)
+    }
+
+    @Test
+    fun missingFiscalYearShowsPersianError() {
+        assertThat(ComposerRules.validate(draft(fy = null)))
+            .isEqualTo(ComposerRules.ERR_NO_FY)
+    }
+
+    @Test
+    fun missingCategoryShowsPersianError() {
+        assertThat(ComposerRules.validate(draft(categoryId = "")))
+            .isEqualTo(ComposerRules.ERR_NO_CATEGORY)
+    }
+
+    @Test
+    fun transferWithOneAccountShowsPersianError() {
+        assertThat(
+            ComposerRules.validate(
+                draft(accounts = listOf(cash), transfer = true, toAccountId = cash.id),
+            ),
+        ).isEqualTo(ComposerRules.ERR_NEED_TWO_ACCOUNTS)
+    }
+
+    @Test
+    fun transferSameAccountsShowsPersianError() {
+        assertThat(
+            ComposerRules.validate(
+                draft(
+                    accounts = listOf(cash, bank),
+                    transfer = true,
+                    accountId = cash.id,
+                    toAccountId = cash.id,
+                ),
+            ),
+        ).isEqualTo(ComposerRules.ERR_SAME_ACCOUNTS)
+    }
+
+    @Test
+    fun staleAccountFallsBackToLiveCash() {
+        assertThat(ComposerRules.resolveLedgerAccountId("gone", listOf(cash))).isEqualTo("cash")
+    }
+
+    @Test
+    fun zeroAmountRejected() {
+        assertThat(ComposerRules.validate(draft(amount = "0")))
+            .isEqualTo(ComposerRules.ERR_AMOUNT_ZERO)
     }
 }
