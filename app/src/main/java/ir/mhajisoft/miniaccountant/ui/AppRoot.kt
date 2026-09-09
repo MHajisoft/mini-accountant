@@ -12,6 +12,7 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -45,15 +45,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -62,7 +57,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -74,8 +68,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -103,6 +95,7 @@ import com.patrykandpatrick.vico.compose.pie.data.pieSeries
 import com.patrykandpatrick.vico.compose.pie.rememberPieChart
 import ir.mhajisoft.miniaccountant.MainActivity
 import ir.mhajisoft.miniaccountant.R
+import ir.mhajisoft.miniaccountant.data.repository.AccountBalance
 import ir.mhajisoft.miniaccountant.domain.bank.BankMatch
 import ir.mhajisoft.miniaccountant.domain.bank.CardMath
 import ir.mhajisoft.miniaccountant.domain.bank.IbanMath
@@ -119,7 +112,14 @@ import ir.mhajisoft.miniaccountant.domain.model.Direction
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
 import ir.mhajisoft.miniaccountant.domain.money.Money
 import ir.mhajisoft.miniaccountant.domain.money.PersianDigits
-import ir.mhajisoft.miniaccountant.ui.components.JalaliDatePickerDialog
+import ir.mhajisoft.miniaccountant.ui.components.ChoiceChip
+import ir.mhajisoft.miniaccountant.ui.components.FinanceCard
+import ir.mhajisoft.miniaccountant.ui.components.FinanceEmptyState
+import ir.mhajisoft.miniaccountant.ui.components.FinanceTextField
+import ir.mhajisoft.miniaccountant.ui.components.MoneyToneText
+import ir.mhajisoft.miniaccountant.ui.components.PrimaryWideButton
+import ir.mhajisoft.miniaccountant.ui.components.SectionLabel
+import ir.mhajisoft.miniaccountant.ui.components.TonalCard
 import ir.mhajisoft.miniaccountant.ui.components.formatJalali
 import ir.mhajisoft.miniaccountant.ui.components.formatMoney
 import ir.mhajisoft.miniaccountant.ui.theme.MiniAccountantTheme
@@ -134,6 +134,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteMore : NavKey
 @Serializable data object RouteAccounts : NavKey
 @Serializable data object RoutePeople : NavKey
+@Serializable data class RoutePerson(val personId: String) : NavKey
 @Serializable data object RouteCategories : NavKey
 @Serializable data object RouteVault : NavKey
 @Serializable data object RouteCardForm : NavKey
@@ -203,9 +204,10 @@ fun AppRoot(
             if (current is RouteHome || current is RouteTxns) {
                 Surface(
                     shape = FloatingActionButtonDefaults.shape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shadowElevation = 6.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.size(56.dp).combinedClickable(
                         onClick = { composerMode = 0; showComposer = true },
                         onLongClick = { composerMode = 2; showComposer = true },
@@ -243,7 +245,10 @@ fun AppRoot(
                 }
                 entry<RouteMore> { MoreScreen { backStack.add(it) } }
                 entry<RouteAccounts> { AccountsScreen(state, vm) }
-                entry<RoutePeople> { PeopleScreen(state, vm) }
+                entry<RoutePeople> { PeopleScreen(state, vm, onOpen = { backStack.add(RoutePerson(it)) }) }
+                entry<RoutePerson> { key ->
+                    PersonDetailScreen(state, vm, key.personId, onBack = { backStack.removeLastOrNull() })
+                }
                 entry<RouteCategories> { CategoriesScreen(state, vm) { notify(it) } }
                 entry<RouteVault> {
                     VaultScreen(vm, onSecureWindow, onAddCard = { backStack.add(RouteCardForm) })
@@ -275,12 +280,13 @@ fun AppRoot(
             state = state,
             initialMode = composerMode,
             onDismiss = { showComposer = false },
+            onError = { notify(it) },
             onSaveExpense = { acc, cat, amt, note, at, income ->
-                vm.saveExpense(acc, cat, amt, note, at, income)
+                vm.saveExpense(acc, cat, amt, note, at, income, onError = { notify(it) })
                 showComposer = false
             },
             onSaveTransfer = { from, to, amt, fee, note, at ->
-                vm.saveTransfer(from, to, amt, fee, note, at)
+                vm.saveTransfer(from, to, amt, fee, note, at, onError = { notify(it) })
                 showComposer = false
             },
         )
@@ -301,39 +307,62 @@ fun OnboardingScreen(vm: AppViewModel) {
     var cashName by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf("") }
     var lock by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(16.dp))
         when (step) {
             0 -> {
-                Text(stringResource(R.string.onboarding_fy_title), style = MaterialTheme.typography.titleLarge)
-                Text(stringResource(R.string.onboarding_fy_body))
-                Text(stringResource(R.string.year) + " " + PersianDigits.toPersian(today.year.toString()))
-                OutlinedTextField(PersianDigits.toPersian(month.toString()), { month = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text(stringResource(R.string.fy_start_month)) })
-                OutlinedTextField(PersianDigits.toPersian(day.toString()), { day = PersianDigits.toAscii(it).toIntOrNull() ?: 1 }, label = { Text(stringResource(R.string.fy_start_day)) })
-                Button(onClick = { step = 1 }, Modifier.fillMaxWidth().padding(top = 16.dp)) { Text(stringResource(R.string.next)) }
+                FinanceCard {
+                    Text(stringResource(R.string.onboarding_fy_title), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.onboarding_fy_body))
+                    Text(stringResource(R.string.year) + " " + PersianDigits.toPersian(today.year.toString()))
+                    FinanceTextField(
+                        PersianDigits.toPersian(month.toString()),
+                        { month = PersianDigits.toAscii(it).toIntOrNull() ?: 1 },
+                        label = stringResource(R.string.fy_start_month),
+                        keyboardType = KeyboardType.Number,
+                    )
+                    FinanceTextField(
+                        PersianDigits.toPersian(day.toString()),
+                        { day = PersianDigits.toAscii(it).toIntOrNull() ?: 1 },
+                        label = stringResource(R.string.fy_start_day),
+                        keyboardType = KeyboardType.Number,
+                    )
+                    PrimaryWideButton(stringResource(R.string.next), onClick = { step = 1 })
+                }
             }
             1 -> {
-                Text(stringResource(R.string.onboarding_account_title), style = MaterialTheme.typography.titleLarge)
-                Text(stringResource(R.string.onboarding_account_body))
-                OutlinedTextField(cashName, { cashName = it }, label = { Text(stringResource(R.string.cash_account_name)) })
-                OutlinedTextField(opening, { opening = it }, label = { Text(stringResource(R.string.opening_balance)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                Button(onClick = { step = 2 }, Modifier.fillMaxWidth().padding(top = 16.dp)) { Text(stringResource(R.string.next)) }
+                FinanceCard {
+                    Text(stringResource(R.string.onboarding_account_title), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.onboarding_account_body))
+                    FinanceTextField(cashName, { cashName = it }, label = stringResource(R.string.cash_account_name))
+                    FinanceTextField(
+                        opening,
+                        { opening = it },
+                        label = stringResource(R.string.opening_balance),
+                        keyboardType = KeyboardType.Number,
+                    )
+                    PrimaryWideButton(stringResource(R.string.next), onClick = { step = 2 })
+                }
             }
             else -> {
-                Text(stringResource(R.string.onboarding_lock_title), style = MaterialTheme.typography.titleLarge)
-                Text(stringResource(R.string.onboarding_lock_body))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(lock, { lock = it })
-                    Text(stringResource(R.string.enable_lock))
+                FinanceCard {
+                    Text(stringResource(R.string.onboarding_lock_title), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.onboarding_lock_body))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(lock, { lock = it })
+                        Text(stringResource(R.string.enable_lock))
+                    }
+                    PrimaryWideButton(
+                        stringResource(R.string.start),
+                        onClick = {
+                            val open = Money.parseDisplayAmount(opening, false) ?: 0L
+                            vm.completeOnboarding(month, day, cashName, open, lock)
+                        },
+                    )
                 }
-                Button(
-                    onClick = {
-                        val open = Money.parseDisplayAmount(opening, false) ?: 0L
-                        vm.completeOnboarding(month, day, cashName, open, lock)
-                    },
-                    Modifier.fillMaxWidth().padding(top = 16.dp),
-                ) { Text(stringResource(R.string.start)) }
             }
         }
     }
@@ -352,23 +381,34 @@ fun HomeScreen(
     var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text(stringResource(R.string.total_balance), style = MaterialTheme.typography.labelLarge)
-            Text(formatMoney(state.total, toman), style = MaterialTheme.typography.headlineMedium)
+            TonalCard {
+                Text(stringResource(R.string.total_balance), style = MaterialTheme.typography.labelLarge)
+                Text(formatMoney(state.total, toman), style = MaterialTheme.typography.headlineMedium)
+            }
         }
         item {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.balances.filter { it.account.type != AccountType.PERSON }.forEach { ab ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { onChip(ab.account.id) },
-                        label = { Text("${ab.account.name} ${formatMoney(ab.balanceSigned, toman)}") },
-                    )
+            FinanceCard {
+                SectionLabel(stringResource(R.string.accounts))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.balances.filter { it.account.type != AccountType.PERSON }.forEach { ab ->
+                        ChoiceChip(
+                            selected = false,
+                            onClick = { onChip(ab.account.id) },
+                            label = "${ab.account.name} ${formatMoney(ab.balanceSigned, toman)}",
+                        )
+                    }
                 }
             }
         }
-        item { Text(stringResource(R.string.recent_txns), style = MaterialTheme.typography.titleMedium) }
+        item { SectionLabel(stringResource(R.string.recent_txns)) }
         if (state.recent.isEmpty()) {
-            item { Text(stringResource(R.string.empty_home)) }
+            item {
+                FinanceEmptyState(
+                    SymbolIcons.Receipt,
+                    stringResource(R.string.empty_home_title),
+                    stringResource(R.string.empty_home),
+                )
+            }
         } else {
             items(state.recent, key = { it.id }) { txn ->
                 TxnRow(txn, state, onClick = {
@@ -406,13 +446,26 @@ fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit, onLon
     val acc = state.accounts.firstOrNull { it.id == txn.accountId }
     val toman = state.settings.displayToman
     val sign = if (txn.direction == Direction.IN) "+" else "−"
-    ListItem(
-        headlineContent = { Text(cat?.name ?: stringResource(R.string.transfer)) },
-        supportingContent = { Text("${acc?.name.orEmpty()} · ${formatJalali(txn.occurredAt)} ${txn.note}") },
-        trailingContent = { Text(sign + formatMoney(txn.amount, toman)) },
-        leadingContent = { Icon(SymbolIcons.byKey(cat?.iconKey ?: "swap_horiz"), null) },
-        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
-    )
+    FinanceCard(Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(SymbolIcons.byKey(cat?.iconKey ?: "swap_horiz"), null, tint = MaterialTheme.colorScheme.primary)
+                Column {
+                    Text(cat?.name ?: stringResource(R.string.transfer), style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "${acc?.name.orEmpty()} · ${formatJalali(txn.occurredAt)} ${txn.note}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            MoneyToneText(sign + formatMoney(txn.amount, toman), inbound = txn.direction == Direction.IN)
+        }
+    }
 }
 
 @Composable
@@ -442,21 +495,29 @@ fun TxnListScreen(
         .filter { categoryFilter == null || it.categoryId == categoryFilter }
         .groupBy { Triple(it.jalaliYear, it.jalaliMonth, it.jalaliDay) }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(16.dp), label = { Text(stringResource(R.string.search)) })
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(accountFilter == null, { accountFilter = null }, { Text(stringResource(R.string.all)) })
-            state.accounts.filter { it.type != AccountType.PERSON && !it.archived }.take(6).forEach { acc ->
-                FilterChip(accountFilter == acc.id, { accountFilter = acc.id }, { Text(acc.name) })
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FinanceTextField(q, { q = it }, label = stringResource(R.string.search))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(accountFilter == null, { accountFilter = null }, stringResource(R.string.all))
+                state.accounts.filter { it.type != AccountType.PERSON && !it.archived }.take(6).forEach { acc ->
+                    ChoiceChip(accountFilter == acc.id, { accountFilter = acc.id }, acc.name)
+                }
             }
-        }
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(categoryFilter == null, { categoryFilter = null }, { Text(stringResource(R.string.filter)) })
-            state.categories.filter { !it.isSystem || it.kind != CategoryKind.TRANSFER }.take(6).forEach { cat ->
-                FilterChip(categoryFilter == cat.id, { categoryFilter = cat.id }, { Text(cat.name) })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(categoryFilter == null, { categoryFilter = null }, stringResource(R.string.filter))
+                state.categories.filter { !it.isSystem || it.kind != CategoryKind.TRANSFER }.take(6).forEach { cat ->
+                    ChoiceChip(categoryFilter == cat.id, { categoryFilter = cat.id }, cat.name)
+                }
             }
         }
         if (grouped.isEmpty()) {
-            Text(stringResource(R.string.empty_txns), Modifier.padding(16.dp))
+            Box(Modifier.padding(16.dp)) {
+                FinanceEmptyState(
+                    SymbolIcons.Receipt,
+                    stringResource(R.string.empty_txns_title),
+                    stringResource(R.string.empty_txns),
+                )
+            }
         } else {
             LazyColumn {
                 grouped.toSortedMap(compareByDescending<Triple<Int, Int, Int>> { it.first }.thenByDescending { it.second }.thenByDescending { it.third }).forEach { (day, rows) ->
@@ -541,13 +602,13 @@ private fun EditTxnDialog(
         title = { Text(stringResource(R.string.edit)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                FinanceTextField(
                     amount,
                     { amount = it },
-                    label = { Text(stringResource(R.string.amount)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = stringResource(R.string.amount),
+                    keyboardType = KeyboardType.Number,
                 )
-                OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.note)) })
+                FinanceTextField(note, { note = it }, label = stringResource(R.string.note))
             }
         },
         confirmButton = {
@@ -564,7 +625,17 @@ private fun EditTxnDialog(
 
 @Composable
 fun ReportScreen(state: AppUiState, vm: AppViewModel, onSlice: (String) -> Unit) {
-    val fy = state.fy ?: return Text(stringResource(R.string.empty_reports), Modifier.padding(16.dp))
+    val fy = state.fy
+    if (fy == null) {
+        Box(Modifier.padding(16.dp)) {
+            FinanceEmptyState(
+                SymbolIcons.Chart,
+                stringResource(R.string.empty_reports_title),
+                stringResource(R.string.empty_reports_body),
+            )
+        }
+        return
+    }
     var month by remember { mutableIntStateOf(JalaliConverter.fromEpochMillis(System.currentTimeMillis()).month) }
     var yearMode by remember { mutableStateOf(false) }
     val rows = state.txns.filter {
@@ -576,32 +647,44 @@ fun ReportScreen(state: AppUiState, vm: AppViewModel, onSlice: (String) -> Unit)
     val byCat = rows.groupBy { it.categoryId ?: "" }.mapValues { e ->
         e.value.sumOf { if (it.direction == Direction.OUT) it.amount else 0L }
     }.filter { it.value > 0L }
-    Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FilterChip(!yearMode, { yearMode = false }, { Text(stringResource(R.string.month_mode)) })
-            FilterChip(yearMode, { yearMode = true }, { Text(stringResource(R.string.year_mode)) })
-        }
-        if (!yearMode) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("−") }
-                Text("${JalaliLabels.monthName(month)} ${PersianDigits.toPersian(fy.startJalaliYear.toString())}")
-                TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("+") }
+    Column(
+        Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FinanceCard {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ChoiceChip(!yearMode, { yearMode = false }, stringResource(R.string.month_mode))
+                ChoiceChip(yearMode, { yearMode = true }, stringResource(R.string.year_mode))
             }
-        } else {
-            Text(PersianDigits.toPersian(fy.label))
+            if (!yearMode) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("−") }
+                    Text("${JalaliLabels.monthName(month)} ${PersianDigits.toPersian(fy.startJalaliYear.toString())}")
+                    TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("+") }
+                }
+            } else {
+                Text(PersianDigits.toPersian(fy.label))
+            }
         }
         if (byCat.isEmpty()) {
-            Text(stringResource(R.string.empty_reports))
+            FinanceEmptyState(
+                SymbolIcons.Chart,
+                stringResource(R.string.empty_reports_title),
+                stringResource(R.string.empty_reports_body),
+            )
         } else {
-            Text(stringResource(R.string.pie_by_category), style = MaterialTheme.typography.titleMedium)
-            ReportCharts(byCat, rows, yearMode, onSlice)
+            FinanceCard {
+                Text(stringResource(R.string.pie_by_category), style = MaterialTheme.typography.titleMedium)
+                ReportCharts(byCat, rows, yearMode, onSlice)
+            }
             byCat.forEach { (id, amt) ->
                 val cat = state.categories.firstOrNull { it.id == id }
-                ListItem(
-                    headlineContent = { Text(cat?.name ?: id) },
-                    trailingContent = { Text(formatMoney(amt, state.settings.displayToman)) },
-                    modifier = Modifier.clickable { onSlice(id) },
-                )
+                FinanceCard(Modifier.clickable { onSlice(id) }) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(cat?.name ?: id, style = MaterialTheme.typography.titleSmall)
+                        Text(formatMoney(amt, state.settings.displayToman), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
             }
         }
     }
@@ -666,13 +749,15 @@ fun MoreScreen(open: (NavKey) -> Unit) {
         R.string.lock to RouteLock,
         R.string.settings to RouteSettings,
     )
-    LazyColumn {
+    LazyColumn(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         items(items.size) { i ->
             val (res, route) = items[i]
-            ListItem(
-                headlineContent = { Text(stringResource(res)) },
-                modifier = Modifier.clickable { open(route) },
-            )
+            FinanceCard(Modifier.clickable { open(route) }) {
+                Text(stringResource(res), style = MaterialTheme.typography.titleMedium)
+            }
         }
     }
 }
@@ -685,27 +770,44 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
     var opening by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Account?>(null) }
     val ledgerAccounts = state.accounts.filter { it.type != AccountType.PERSON }
-    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_account)) })
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(type == AccountType.CASH, { type = AccountType.CASH }, { Text(stringResource(R.string.type_cash)) })
-            FilterChip(type == AccountType.BANK, { type = AccountType.BANK }, { Text(stringResource(R.string.type_bank)) })
-            FilterChip(type == AccountType.CARD, { type = AccountType.CARD }, { Text(stringResource(R.string.type_card)) })
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(include, { include = it })
-            Text(stringResource(R.string.include_in_total))
-        }
-        OutlinedTextField(opening, { opening = it }, label = { Text(stringResource(R.string.opening_balance)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        Button(onClick = {
-            if (name.isNotBlank()) {
-                val open = Money.parseDisplayAmount(opening, state.settings.displayToman) ?: 0L
-                vm.addAccount(name, type, include, open)
-                name = ""
-                opening = ""
+    Column(
+        Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FinanceCard {
+            SectionLabel(stringResource(R.string.add_account))
+            FinanceTextField(name, { name = it }, label = stringResource(R.string.add_account))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(type == AccountType.CASH, { type = AccountType.CASH }, stringResource(R.string.type_cash))
+                ChoiceChip(type == AccountType.BANK, { type = AccountType.BANK }, stringResource(R.string.type_bank))
+                ChoiceChip(type == AccountType.CARD, { type = AccountType.CARD }, stringResource(R.string.type_card))
             }
-        }) { Text(stringResource(R.string.save)) }
-        if (ledgerAccounts.isEmpty()) Text(stringResource(R.string.empty_accounts))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(include, { include = it })
+                Text(stringResource(R.string.include_in_total))
+            }
+            FinanceTextField(
+                opening,
+                { opening = it },
+                label = stringResource(R.string.opening_balance),
+                keyboardType = KeyboardType.Number,
+            )
+            PrimaryWideButton(stringResource(R.string.save), onClick = {
+                if (name.isNotBlank()) {
+                    val open = Money.parseDisplayAmount(opening, state.settings.displayToman) ?: 0L
+                    vm.addAccount(name, type, include, open)
+                    name = ""
+                    opening = ""
+                }
+            })
+        }
+        if (ledgerAccounts.isEmpty()) {
+            FinanceEmptyState(
+                SymbolIcons.Wallet,
+                stringResource(R.string.empty_accounts),
+                stringResource(R.string.empty_accounts_body),
+            )
+        }
         ledgerAccounts.forEach { acc ->
             val typeLabel = when (acc.type) {
                 AccountType.CASH -> stringResource(R.string.type_cash)
@@ -714,24 +816,21 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
                 AccountType.PERSON -> stringResource(R.string.type_person)
             }
             val bal = state.balances.firstOrNull { it.account.id == acc.id }?.balanceSigned
-            ListItem(
-                headlineContent = { Text(acc.name) },
-                supportingContent = {
-                    Text(
-                        buildString {
-                            append(typeLabel)
-                            if (acc.archived) {
-                                append(" · ")
-                                append(stringResource(R.string.archived))
-                            }
-                        },
-                    )
-                },
-                trailingContent = {
-                    Text(formatMoney(bal ?: 0L, state.settings.displayToman))
-                },
-                modifier = Modifier.clickable { editing = acc },
-            )
+            FinanceCard(Modifier.clickable { editing = acc }) {
+                Text(acc.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    buildString {
+                        append(typeLabel)
+                        if (acc.archived) {
+                            append(" · ")
+                            append(stringResource(R.string.archived))
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(formatMoney(bal ?: 0L, state.settings.displayToman), style = MaterialTheme.typography.titleLarge)
+            }
         }
     }
     editing?.let { acc ->
@@ -742,7 +841,7 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
             title = { Text(stringResource(R.string.edit)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(editName, { editName = it }, label = { Text(stringResource(R.string.name)) })
+                    FinanceTextField(editName, { editName = it }, label = stringResource(R.string.name))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(editInclude, { editInclude = it })
                         Text(stringResource(R.string.include_in_total))
@@ -767,53 +866,6 @@ fun AccountsScreen(state: AppUiState, vm: AppViewModel) {
     }
 }
 
-@Composable
-fun PeopleScreen(state: AppUiState, vm: AppViewModel) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_person)) })
-        OutlinedTextField(phone, { phone = it }, label = { Text(stringResource(R.string.phone)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-        Button(onClick = {
-            if (name.isNotBlank()) {
-                vm.addPerson(name, phone.ifBlank { null }, null)
-                name = ""
-                phone = ""
-            }
-        }) {
-            Text(stringResource(R.string.save))
-        }
-        OutlinedTextField(amount, { amount = it }, label = { Text(stringResource(R.string.pay_amount)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        if (state.people.isEmpty()) Text(stringResource(R.string.empty_people))
-        state.people.forEach { p ->
-            val bal = state.balances.firstOrNull { it.account.id == p.accountId }?.balanceSigned ?: 0L
-            val label = if (bal >= 0) stringResource(R.string.debtor) else stringResource(R.string.creditor)
-            ListItem(
-                headlineContent = { Text(p.name) },
-                supportingContent = {
-                    Text(buildString {
-                        append(label)
-                        p.phone?.takeIf { it.isNotBlank() }?.let {
-                            append(" · ")
-                            append(it)
-                        }
-                    })
-                },
-                trailingContent = { Text(formatMoney(kotlin.math.abs(bal), state.settings.displayToman)) },
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                OutlinedButton(onClick = { vm.payPerson(p.accountId, amount, theyPay = false) }) {
-                    Text(stringResource(R.string.pay_them))
-                }
-                OutlinedButton(onClick = { vm.payPerson(p.accountId, amount, theyPay = true) }) {
-                    Text(stringResource(R.string.they_pay))
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> Unit) {
@@ -824,11 +876,12 @@ fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> U
     val palette = listOf(0xFFE65100L, 0xFF1565C0L, 0xFF6A1B9AL, 0xFF2E7D32L, 0xFFC62828L, 0xFF00838FL, 0xFFAD1457L, 0xFF37474FL)
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.add_category)) })
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(kind == CategoryKind.EXPENSE, { kind = CategoryKind.EXPENSE }, { Text(stringResource(R.string.expense)) })
-                FilterChip(kind == CategoryKind.INCOME, { kind = CategoryKind.INCOME }, { Text(stringResource(R.string.income)) })
-            }
+            FinanceCard {
+                FinanceTextField(name, { name = it }, label = stringResource(R.string.add_category))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceChip(kind == CategoryKind.EXPENSE, { kind = CategoryKind.EXPENSE }, stringResource(R.string.expense))
+                    ChoiceChip(kind == CategoryKind.INCOME, { kind = CategoryKind.INCOME }, stringResource(R.string.income))
+                }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SymbolIcons.customIconKeys.forEach { key ->
                     FilterChip(
@@ -848,12 +901,13 @@ fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> U
                     )
                 }
             }
-            Button(onClick = {
+            PrimaryWideButton(stringResource(R.string.save), onClick = {
                 if (name.isNotBlank()) {
                     vm.addCustomCategory(name, iconKey, color, kind)
                     name = ""
                 }
-            }) { Text(stringResource(R.string.save)) }
+            })
+            }
         }
         LazyColumn {
             items(state.categories, key = { it.id }) { cat ->
@@ -974,20 +1028,24 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
     val bank = (match as? BankMatch.Known)?.bank
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         Text(stringResource(R.string.card_form), style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(pan, { pan = it }, label = { Text(stringResource(R.string.card_number)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), leadingIcon = {
-            BankLogo(bank?.logoDrawable ?: "bank_unknown")
-        })
+        FinanceTextField(
+            pan,
+            { pan = it },
+            label = stringResource(R.string.card_number),
+            keyboardType = KeyboardType.Number,
+            leadingIcon = { BankLogo(bank?.logoDrawable ?: "bank_unknown") },
+        )
         if (digits.length >= 6) {
             Text(bank?.let { it.nameFa + (it.formerNameFa?.let { f -> " — $f" } ?: "") } ?: stringResource(R.string.unknown_bank))
         }
-        OutlinedTextField(cvv, { cvv = it }, label = { Text(stringResource(R.string.cvv)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
+        FinanceTextField(cvv, { cvv = it }, label = stringResource(R.string.cvv), keyboardType = KeyboardType.NumberPassword)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(rememberCvv, { rememberCvv = it })
             Text(stringResource(R.string.remember_cvv))
         }
         Text(stringResource(R.string.cvv_warning), style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(expiryMonth, { expiryMonth = it }, label = { Text(stringResource(R.string.expiry)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        OutlinedTextField(expiryYear, { expiryYear = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        FinanceTextField(expiryMonth, { expiryMonth = it }, label = stringResource(R.string.expiry), keyboardType = KeyboardType.Number)
+        FinanceTextField(expiryYear, { expiryYear = it }, label = stringResource(R.string.year), keyboardType = KeyboardType.Number)
         val acc = state.accounts.firstOrNull { it.type == AccountType.CARD } ?: state.accounts.firstOrNull()
         Button(onClick = {
             if (!CardMath.luhnValid(pan)) {
@@ -1036,11 +1094,11 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
             }
         }) { Text(stringResource(R.string.save)) }
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(accountNumber, { accountNumber = it }, label = { Text(stringResource(R.string.account_number)) })
-        OutlinedTextField(
+        FinanceTextField(accountNumber, { accountNumber = it }, label = stringResource(R.string.account_number))
+        FinanceTextField(
             IbanMath.formatGrouped(iban),
             { iban = it },
-            label = { Text(stringResource(R.string.iban)) },
+            label = stringResource(R.string.iban),
         )
         val ibanMatch = vm.vaultRepo.directory.resolveIban(iban)
         val ibanBank = (ibanMatch as? BankMatch.Known)?.bank
@@ -1082,11 +1140,11 @@ fun FiscalScreen(state: AppUiState, vm: AppViewModel) {
                 val raw = openings[acc.id] ?: 0L
                 mutableStateOf(PersianDigits.toPersian(Money.toDisplayUnit(raw, state.settings.displayToman).toString()))
             }
-            OutlinedTextField(
+            FinanceTextField(
                 text,
                 { text = it },
-                label = { Text(acc.name) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                label = acc.name,
+                keyboardType = KeyboardType.Number,
                 trailingIcon = {
                     TextButton(onClick = { vm.setOpening(acc.id, text) }) { Text(stringResource(R.string.save)) }
                 },
@@ -1182,7 +1240,7 @@ fun BackupScreen(vm: AppViewModel) {
     val one = vm.backupRepo.oneDriveAvailability()
     var cloudMsg by remember { mutableStateOf<String?>(null) }
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        OutlinedTextField(pass, { pass = it }, label = { Text(stringResource(R.string.passphrase)) })
+        FinanceTextField(pass, { pass = it }, label = stringResource(R.string.passphrase))
         Button(onClick = { create.launch("mini-accountant.pfbak") }, enabled = pass.length >= 4) {
             Text(stringResource(R.string.backup_local))
         }
@@ -1233,105 +1291,23 @@ fun LockSettingsScreen(state: AppUiState, vm: AppViewModel) {
 
 @Composable
 fun SettingsScreen(state: AppUiState, vm: AppViewModel) {
-    Column(Modifier.padding(16.dp)) {
-        Text(stringResource(R.string.display_unit))
-        Row {
-            FilterChip(state.settings.displayToman, { vm.setToman(true) }, { Text(stringResource(R.string.toman)) })
-            FilterChip(!state.settings.displayToman, { vm.setToman(false) }, { Text(stringResource(R.string.rial)) })
-        }
-        Text(stringResource(R.string.default_account))
-        state.accounts.forEach { acc ->
-            FilterChip(state.settings.defaultAccountId == acc.id, { vm.setDefaultAccount(acc.id) }, { Text(acc.name) })
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ComposerSheet(
-    state: AppUiState,
-    initialMode: Int,
-    onDismiss: () -> Unit,
-    onSaveExpense: (String, String, String, String, Long, Boolean) -> Unit,
-    onSaveTransfer: (String, String, String, String, String, Long) -> Unit,
-) {
-    var mode by remember { mutableIntStateOf(initialMode) }
-    val focus = remember { FocusRequester() }
-    var amount by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    val lastAcc = state.settings.lastAccountId ?: state.settings.defaultAccountId ?: state.accounts.firstOrNull()?.id
-    var accountId by remember { mutableStateOf(lastAcc.orEmpty()) }
-    val lastCat = if (mode == 1) state.settings.lastIncomeCategoryId else state.settings.lastExpenseCategoryId
-    val cats = state.categories.filter {
-        when (mode) {
-            1 -> it.kind == CategoryKind.INCOME
-            else -> it.kind == CategoryKind.EXPENSE && it.id != SystemCategories.FEE_ID
-        }
-    }
-    var catId by remember { mutableStateOf(lastCat ?: cats.firstOrNull()?.id.orEmpty()) }
-    var toId by remember { mutableStateOf(state.accounts.drop(1).firstOrNull()?.id.orEmpty()) }
-    var fee by remember { mutableStateOf("") }
-    var at by remember { mutableStateOf(System.currentTimeMillis()) }
-    var pick by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(mode == 0, { mode = 0 }, shape = SegmentedButtonDefaults.itemShape(0, 3)) { Text(stringResource(R.string.expense)) }
-                SegmentedButton(mode == 1, { mode = 1 }, shape = SegmentedButtonDefaults.itemShape(1, 3)) { Text(stringResource(R.string.income)) }
-                SegmentedButton(mode == 2, { mode = 2 }, shape = SegmentedButtonDefaults.itemShape(2, 3)) { Text(stringResource(R.string.transfer)) }
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FinanceCard {
+            SectionLabel(stringResource(R.string.display_unit))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(state.settings.displayToman, { vm.setToman(true) }, stringResource(R.string.toman))
+                ChoiceChip(!state.settings.displayToman, { vm.setToman(false) }, stringResource(R.string.rial))
             }
-            OutlinedTextField(
-                amount,
-                { amount = it },
-                Modifier.fillMaxWidth().focusRequester(focus),
-                label = { Text(stringResource(R.string.amount)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            TextButton(onClick = { pick = true }) { Text(formatJalali(at)) }
-            if (mode < 2) {
-                Text(stringResource(R.string.account))
-                FlowRowWrap(state.accounts.filter { it.type != AccountType.PERSON }) { acc ->
-                    FilterChip(accountId == acc.id, { accountId = acc.id }, { Text(acc.name) })
-                }
-                Text(stringResource(R.string.category))
-                FlowRowWrap(cats) { c ->
-                    FilterChip(catId == c.id, { catId = c.id }, {
-                        Row {
-                            Icon(SymbolIcons.byKey(c.iconKey), null, Modifier.size(16.dp))
-                            Text(c.name)
-                        }
-                    })
-                }
-                OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.note)) })
-                Button(onClick = { onSaveExpense(accountId, catId, amount, note, at, mode == 1) }, Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.save))
-                }
-            } else {
-                Text(stringResource(R.string.from_account))
-                FlowRowWrap(state.accounts) { acc -> FilterChip(accountId == acc.id, { accountId = acc.id }, { Text(acc.name) }) }
-                Text(stringResource(R.string.to_account))
-                FlowRowWrap(state.accounts) { acc -> FilterChip(toId == acc.id, { toId = acc.id }, { Text(acc.name) }) }
-                OutlinedTextField(fee, { fee = it }, label = { Text(stringResource(R.string.fee_optional)) })
-                OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.note)) })
-                Button(onClick = { onSaveTransfer(accountId, toId, amount, fee, note, at) }, Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.save))
+        }
+        FinanceCard {
+            SectionLabel(stringResource(R.string.default_account))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.accounts.forEach { acc ->
+                    ChoiceChip(state.settings.defaultAccountId == acc.id, { vm.setDefaultAccount(acc.id) }, acc.name)
                 }
             }
         }
     }
-    if (pick) {
-        JalaliDatePickerDialog(JalaliConverter.fromEpochMillis(at), { pick = false }) {
-            at = JalaliConverter.toEpochMillisStartOfDay(it) + (at % 86_400_000L)
-            pick = false
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun <T> FlowRowWrap(items: List<T>, content: @Composable (T) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items.forEach { content(it) } }
 }
 
 private fun MainActivity.lifecycleScopeLaunch(block: suspend () -> Unit) {
@@ -1341,11 +1317,13 @@ private fun MainActivity.lifecycleScopeLaunch(block: suspend () -> Unit) {
 @Preview(showBackground = true, locale = "fa", name = "Home")
 @Composable
 fun PreviewHome() {
+    val cash = Account("1", "نقد", AccountType.CASH, color = 0xFF0F766E, sortOrder = 0, createdAt = 0, updatedAt = 0)
     MiniAccountantTheme {
         HomeScreen(
             AppUiState(
                 ready = true,
-                accounts = listOf(Account("1", "نقد", AccountType.CASH, color = 0xFF0F766E, sortOrder = 0, createdAt = 0, updatedAt = 0)),
+                accounts = listOf(cash),
+                balances = listOf(AccountBalance(cash, 5_420_000)),
                 recent = listOf(
                     LedgerTransaction("t", "1", "sys-food", null, 120000, Direction.OUT, "نان", 0, 1405, 6, 15, "fy", null, 0),
                 ),
@@ -1375,26 +1353,13 @@ fun PreviewTxns() {
     }
 }
 
-@Preview(showBackground = true, locale = "fa", name = "Add sheet")
-@Composable
-fun PreviewAddSheet() {
-    MiniAccountantTheme {
-        Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.add_expense))
-            OutlinedTextField("۱۲۰۰۰۰", {}, label = { Text(stringResource(R.string.amount)) })
-            Text("${stringResource(R.string.type_cash)} · ${stringResource(R.string.category)}")
-            Button(onClick = {}) { Text(stringResource(R.string.save)) }
-        }
-    }
-}
-
 @Preview(showBackground = true, locale = "fa", name = "Card form")
 @Composable
 fun PreviewCard() {
     MiniAccountantTheme {
-        Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.card_form))
-            OutlinedTextField("610433", {}, label = { Text(stringResource(R.string.card_number)) })
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.card_form), style = MaterialTheme.typography.titleLarge)
+            FinanceTextField("6104337812345678", {}, label = stringResource(R.string.card_number), keyboardType = KeyboardType.Number)
             Text(stringResource(R.string.bank_mellat_name))
         }
     }
