@@ -1,0 +1,40 @@
+Hesabres / حسابرس
+=================
+
+Persian product name: حسابرس
+English identifier:   Hesabres
+Tagline:              حساباتت، تحت کنترل
+applicationId:        ir.mhajisoft.hesabres
+debug applicationId:  ir.mhajisoft.hesabres.debug
+
+Palette
+-------
+Primary Blue     #2563EB
+Deep Blue        #1D4ED8
+Teal             #10B981
+Green            #84CC16
+Soft Background  #E0F2FE
+Off White        #F1F5F9
+
+Typography
+----------
+Brand guide suggests Tajawal. The app keeps Vazirmatn so Persian RTL
+shaping and existing screens stay intact.
+
+Mark
+----
+Glossy 3D document + calculator + green check. Do not substitute a
+different logo. Source files:
+
+  branding/hesabres_mark_source.png
+  branding/hesabres_wordmark.png
+  branding/hesabres_logo_full.png
+  play_store/icon_512.png
+  splash/splash_1080x1920.png
+
+Android launcher
+----------------
+Legacy mipmaps: app/src/main/res/mipmap-*/ic_launcher.png
+Adaptive:       @drawable/ic_launcher_background + @drawable/ic_launcher_foreground
+Manifest:       android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher_round"

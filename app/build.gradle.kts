@@ -17,11 +17,11 @@ val localProperties = Properties().apply {
 fun localProp(key: String): String = localProperties.getProperty(key, "") ?: ""
 
 android {
-    namespace = "ir.mhajisoft.miniaccountant"
+    namespace = "ir.mhajisoft.hesabres"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ir.mhajisoft.miniaccountant"
+        applicationId = "ir.mhajisoft.hesabres"
         minSdk = 26
         targetSdk = 36
         versionCode = 3

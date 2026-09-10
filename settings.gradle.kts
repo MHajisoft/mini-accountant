@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MiniAccountant"
+rootProject.name = "Hesabres"
 include(":app")
