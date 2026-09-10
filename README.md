@@ -1,8 +1,13 @@
-# Mini Accountant / حسابدار کوچک
+# Hesabres / حسابرس
 
 Personal daily ledger for Iranian users. Persian UI, RTL, Vazirmatn, amounts in **Long rials** (optional Toman display).
 
-Package: `ir.mhajisoft.miniaccountant`
+**حساباتت، تحت کنترل**
+
+Package / `applicationId`: `ir.mhajisoft.hesabres`  
+Debug: `ir.mhajisoft.hesabres.debug` (`حسابرس Debug`)
+
+This is a rename of Mini Accountant (حسابدار کوچک). The previous id `ir.mhajisoft.miniaccountant` is accepted only as a legacy backup `appId`. A new `applicationId` installs as a separate app.
 
 ## Open in Android Studio
 
@@ -15,6 +20,10 @@ Package: `ir.mhajisoft.miniaccountant`
 ./gradlew assembleDebug
 ./gradlew testDebugUnitTest
 ```
+
+## Brand
+
+See [branding/BRAND_GUIDE.txt](branding/BRAND_GUIDE.txt). Launcher and Play assets live under `app/src/main/res/`, `play_store/`, and `splash/`. Typography stays **Vazirmatn** (Tajawal is the brand suggestion; it is not bundled so Persian RTL is unchanged).
 
 ## Features
 
@@ -42,7 +51,7 @@ The **core ledger works with zero Google Play services** (Iran / Cafe Bazaar bui
 
 ## Stack
 
-Kotlin 2.3 (K2), Compose Material 3, Hilt + KSP, Navigation 3, Room 3.0.2 + BundledSQLiteDriver, Vico 3, jalalidate (Birashk / 33-year civil leap cycle), Tink, androidx.biometric.
+Kotlin 2.3 (K2), Compose Material 3, Hilt + KSP, Navigation 3, Room 3.0.2 + BundledSQLiteDriver, Vico 3, jalalidate (Birashk / 33-year civil leap cycle), Tink, androidx.biometric, Android 12+ SplashScreen.
 
 ## License
 

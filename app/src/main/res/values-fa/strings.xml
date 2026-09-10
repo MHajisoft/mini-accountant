@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">حسابدار کوچک</string>
+    <string name="app_name">حسابرس</string>
+    <string name="tagline">حساباتت، تحت کنترل</string>
     <string name="tab_home">خانه</string>
     <string name="tab_txns">تراکنش‌ها</string>
     <string name="tab_reports">گزارش</string>
@@ -54,7 +55,7 @@
     <string name="next">ادامه</string>
     <string name="start">شروع</string>
     <string name="unlock">باز کردن قفل</string>
-    <string name="unlock_title">حسابدار کوچک قفل است</string>
+    <string name="unlock_title">حسابرس قفل است</string>
     <string name="unlock_subtitle">با اثر انگشت یا قفل دستگاه وارد شوید</string>
     <string name="invalid_luhn">شماره کارت نامعتبر است</string>
     <string name="invalid_iban">شبا نامعتبر است</string>

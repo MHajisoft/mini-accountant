@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="seed">#0F766E</color>
-    <color name="ic_launcher_background">#0F766E</color>
+    <color name="seed">#2563EB</color>
+    <color name="brand_primary">#2563EB</color>
+    <color name="brand_deep_blue">#1D4ED8</color>
+    <color name="brand_teal">#10B981</color>
+    <color name="brand_green">#84CC16</color>
+    <color name="brand_soft_background">#E0F2FE</color>
+    <color name="brand_off_white">#F1F5F9</color>
+    <color name="ic_launcher_background">#2563EB</color>
+    <color name="splash_background">#E0F2FE</color>
 </resources>
