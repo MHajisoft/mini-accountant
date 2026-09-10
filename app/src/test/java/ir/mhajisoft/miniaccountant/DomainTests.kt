@@ -21,6 +21,7 @@ import ir.mhajisoft.miniaccountant.domain.ledger.TransferPoster
 import ir.mhajisoft.miniaccountant.domain.model.Account
 import ir.mhajisoft.miniaccountant.domain.model.AccountType
 import ir.mhajisoft.miniaccountant.domain.model.Direction
+import ir.mhajisoft.miniaccountant.domain.model.Person
 import ir.mhajisoft.miniaccountant.domain.model.FiscalYear
 import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
 import ir.mhajisoft.miniaccountant.domain.money.Money
@@ -126,6 +127,13 @@ class CardIbanTest {
         assertThat(ansar.mergedInto).isEqualTo("sepah")
         assertThat(ansar.formerNameFa).isEqualTo("انصار سابق")
         assertThat(directory.resolvePan("0000001111111111")).isEqualTo(BankMatch.Unknown)
+    }
+
+    @Test
+    fun logoFallsBackToUnknownWhenBinAndCodeMiss() {
+        assertThat(directory.logoOf("610433", "mellat")).isEqualTo("bank_mellat")
+        assertThat(directory.logoOf("000000", "melli")).isEqualTo("bank_melli")
+        assertThat(directory.logoOf("000000", "missing")).isEqualTo("bank_unknown")
     }
 
     @Test
@@ -370,5 +378,20 @@ class ComposerRulesTest {
     fun zeroAmountRejected() {
         assertThat(ComposerRules.validate(draft(amount = "0")))
             .isEqualTo(ComposerRules.ERR_AMOUNT_ZERO)
+    }
+}
+
+class PersonProfileTest {
+    @Test
+    fun displayNamePrefersFirstAndLast() {
+        val p = Person("id", "acc", "قدیمی", null, null, firstName = "علی", lastName = "رضایی")
+        assertThat(p.displayName).isEqualTo("علی رضایی")
+        assertThat(p.initials).isEqualTo("عر")
+    }
+
+    @Test
+    fun displayNameFallsBackToLegacyName() {
+        val p = Person("id", "acc", "مینا", null, null)
+        assertThat(p.displayName).isEqualTo("مینا")
     }
 }

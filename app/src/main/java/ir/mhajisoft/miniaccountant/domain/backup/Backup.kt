@@ -29,6 +29,7 @@ data class BackupCard(
     val panCipherId: String? = null,
     val cvvCipherId: String? = null,
     val rememberCvv: Boolean = false,
+    val personId: String? = null,
 )
 
 @Serializable

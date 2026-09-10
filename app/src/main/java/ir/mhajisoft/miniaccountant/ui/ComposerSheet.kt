@@ -15,21 +15,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,11 +32,9 @@ import ir.mhajisoft.miniaccountant.R
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliConverter
 import ir.mhajisoft.miniaccountant.domain.ledger.ComposerRules
 import ir.mhajisoft.miniaccountant.domain.ledger.SystemCategories
-import ir.mhajisoft.miniaccountant.domain.model.Account
 import ir.mhajisoft.miniaccountant.domain.model.AccountType
 import ir.mhajisoft.miniaccountant.domain.model.CategoryKind
 import ir.mhajisoft.miniaccountant.ui.components.ChoiceChip
-import ir.mhajisoft.miniaccountant.ui.components.FinanceCard
 import ir.mhajisoft.miniaccountant.ui.components.FinanceTextField
 import ir.mhajisoft.miniaccountant.ui.components.JalaliDatePickerDialog
 import ir.mhajisoft.miniaccountant.ui.components.PrimaryWideButton
@@ -50,7 +42,6 @@ import ir.mhajisoft.miniaccountant.ui.components.SectionLabel
 import ir.mhajisoft.miniaccountant.ui.components.formatJalali
 import ir.mhajisoft.miniaccountant.ui.theme.MiniAccountantTheme
 import ir.mhajisoft.miniaccountant.ui.theme.SymbolIcons
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -62,28 +53,28 @@ fun ComposerSheet(
     onSaveExpense: (String, String, String, String, Long, Boolean) -> Unit,
     onSaveTransfer: (String, String, String, String, String, Long) -> Unit,
 ) {
-    var mode by remember { mutableIntStateOf(initialMode) }
-    val focus = remember { FocusRequester() }
+    var mode by remember { mutableIntStateOf(initialMode.coerceIn(0, 2)) }
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val ledgerAccounts = state.accounts.filter { !it.archived }
-    val spendAccounts = ledgerAccounts.filter { it.type != AccountType.PERSON }
+    val ledgerAccounts = remember(state.accounts) { state.accounts.filter { !it.archived } }
+    val spendAccounts = remember(ledgerAccounts) { ledgerAccounts.filter { it.type != AccountType.PERSON } }
     val lastAcc = ComposerRules.resolveLedgerAccountId(
         state.settings.lastAccountId ?: state.settings.defaultAccountId.orEmpty(),
         ledgerAccounts,
     )
     var accountId by remember { mutableStateOf(lastAcc.orEmpty()) }
-    val cats = state.categories.filter {
-        when (mode) {
-            1 -> it.kind == CategoryKind.INCOME
-            else -> it.kind == CategoryKind.EXPENSE && it.id != SystemCategories.FEE_ID
-        }
+    val catIds = remember(mode, state.categories) {
+        state.categories.filter {
+            when (mode) {
+                1 -> it.kind == CategoryKind.INCOME
+                else -> it.kind == CategoryKind.EXPENSE && it.id != SystemCategories.FEE_ID
+            }
+        }.map { it.id }
     }
+    val cats = state.categories.filter { it.id in catIds }
     val lastCat = if (mode == 1) state.settings.lastIncomeCategoryId else state.settings.lastExpenseCategoryId
-    var catId by remember(mode, cats) {
-        mutableStateOf(
-            lastCat?.takeIf { id -> cats.any { it.id == id } } ?: cats.firstOrNull()?.id.orEmpty(),
-        )
+    var catId by remember(mode, catIds) {
+        mutableStateOf(lastCat?.takeIf { it in catIds } ?: catIds.firstOrNull().orEmpty())
     }
     var toId by remember {
         mutableStateOf(ledgerAccounts.firstOrNull { it.id != accountId }?.id.orEmpty())
@@ -97,8 +88,7 @@ fun ComposerSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-        dragHandle = null,
+        tonalElevation = 2.dp,
     ) {
         Column(
             Modifier
@@ -119,29 +109,14 @@ fun ComposerSheet(
                 ),
                 style = MaterialTheme.typography.titleLarge,
             )
-            FinanceCard {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    val labels = listOf(
-                        stringResource(R.string.expense),
-                        stringResource(R.string.income),
-                        stringResource(R.string.transfer),
-                    )
-                    labels.forEachIndexed { index, label ->
-                        SegmentedButton(
-                            selected = mode == index,
-                            onClick = { mode = index },
-                            shape = SegmentedButtonDefaults.itemShape(index, labels.size),
-                            modifier = Modifier.weight(1f),
-                            label = { Text(label) },
-                            icon = {},
-                        )
-                    }
-                }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(mode == 0, { mode = 0 }, stringResource(R.string.expense))
+                ChoiceChip(mode == 1, { mode = 1 }, stringResource(R.string.income))
+                ChoiceChip(mode == 2, { mode = 2 }, stringResource(R.string.transfer))
             }
             FinanceTextField(
                 value = amount,
                 onValueChange = { amount = it },
-                modifier = Modifier.focusRequester(focus),
                 label = stringResource(R.string.amount),
                 keyboardType = KeyboardType.Number,
             )
@@ -180,9 +155,7 @@ fun ComposerSheet(
                             fiscalYear = state.fy,
                         ),
                     )
-                    if (err != null) {
-                        onError(err)
-                    } else {
+                    if (err != null) onError(err) else {
                         onSaveExpense(
                             ComposerRules.resolveLedgerAccountId(accountId, ledgerAccounts).orEmpty(),
                             catId,
@@ -227,10 +200,6 @@ fun ComposerSheet(
             }
             Spacer(Modifier.height(12.dp))
         }
-        LaunchedEffect(Unit) {
-            delay(120)
-            runCatching { focus.requestFocus() }
-        }
     }
     if (pick) {
         JalaliDatePickerDialog(JalaliConverter.fromEpochMillis(at), { pick = false }) {
@@ -246,9 +215,8 @@ fun PreviewComposerSheetBody() {
     MiniAccountantTheme {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("ثبت هزینه", style = MaterialTheme.typography.titleLarge)
-            FinanceCard {
-                Text("هزینه · درآمد · جابه‌جایی", style = MaterialTheme.typography.labelLarge)
-            }
+            ChoiceChip(true, {}, "هزینه")
+            ChoiceChip(false, {}, "درآمد")
             FinanceTextField("۱۲۰۰۰۰", {}, label = "مبلغ", keyboardType = KeyboardType.Number)
             ChoiceChip(true, {}, "نقد")
             ChoiceChip(false, {}, "خوراک", SymbolIcons.byKey("restaurant"))

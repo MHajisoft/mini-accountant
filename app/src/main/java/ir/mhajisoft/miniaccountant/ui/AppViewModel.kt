@@ -146,6 +146,7 @@ class AppViewModel @Inject constructor(
         occurredAt: Long,
         income: Boolean,
         onError: (String) -> Unit = {},
+        onOk: () -> Unit = {},
     ) {
         viewModelScope.launch {
             val ui = state.value
@@ -181,6 +182,7 @@ class AppViewModel @Inject constructor(
                 )
             }.onSuccess {
                 settingsStore.setLastUsed(ledgerAccountId, categoryId, expense = !income)
+                onOk()
             }.onFailure { onError(mapWriteError(it)) }
         }
     }
@@ -193,6 +195,7 @@ class AppViewModel @Inject constructor(
         note: String,
         at: Long,
         onError: (String) -> Unit = {},
+        onOk: () -> Unit = {},
     ) {
         viewModelScope.launch {
             val ui = state.value
@@ -216,6 +219,7 @@ class AppViewModel @Inject constructor(
             val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
             val fee = Money.parseDisplayAmount(feeDisplay, ui.settings.displayToman)
             runCatching { ledger.postTransfer(from, to, amount, fee, at, note) }
+                .onSuccess { onOk() }
                 .onFailure { onError(mapWriteError(it)) }
         }
     }
@@ -285,8 +289,20 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun addPerson(name: String, phone: String?, note: String?) {
-        viewModelScope.launch { ledger.createPerson(name, phone, note, 0xFF6A1B9A) }
+    fun addPerson(
+        firstName: String,
+        lastName: String,
+        phone: String?,
+        email: String?,
+        instagram: String?,
+        telegram: String?,
+        whatsapp: String?,
+        note: String?,
+        avatarColor: Long,
+    ) {
+        viewModelScope.launch {
+            ledger.createPerson(firstName, lastName, phone, email, instagram, telegram, whatsapp, note, avatarColor)
+        }
     }
 
     fun updatePerson(person: Person) {

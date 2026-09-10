@@ -79,6 +79,7 @@ class BackupRepository @Inject constructor(
                     panCipherId = it.panCipherId,
                     cvvCipherId = it.cvvCipherId,
                     rememberCvv = it.rememberCvv,
+                    personId = it.personId,
                 )
             },
         )

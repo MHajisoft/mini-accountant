@@ -113,6 +113,7 @@ import ir.mhajisoft.miniaccountant.domain.model.LedgerTransaction
 import ir.mhajisoft.miniaccountant.domain.money.Money
 import ir.mhajisoft.miniaccountant.domain.money.PersianDigits
 import ir.mhajisoft.miniaccountant.ui.components.ChoiceChip
+import ir.mhajisoft.miniaccountant.ui.components.ExpiryMonthYearPicker
 import ir.mhajisoft.miniaccountant.ui.components.FinanceCard
 import ir.mhajisoft.miniaccountant.ui.components.FinanceEmptyState
 import ir.mhajisoft.miniaccountant.ui.components.FinanceTextField
@@ -135,6 +136,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteAccounts : NavKey
 @Serializable data object RoutePeople : NavKey
 @Serializable data class RoutePerson(val personId: String) : NavKey
+@Serializable data class RoutePersonEdit(val personId: String? = null) : NavKey
 @Serializable data object RouteCategories : NavKey
 @Serializable data object RouteVault : NavKey
 @Serializable data object RouteCardForm : NavKey
@@ -245,13 +247,28 @@ fun AppRoot(
                 }
                 entry<RouteMore> { MoreScreen { backStack.add(it) } }
                 entry<RouteAccounts> { AccountsScreen(state, vm) }
-                entry<RoutePeople> { PeopleScreen(state, vm, onOpen = { backStack.add(RoutePerson(it)) }) }
+                entry<RoutePeople> {
+                    PeopleScreen(
+                        state,
+                        onOpen = { backStack.add(RoutePerson(it)) },
+                        onAdd = { backStack.add(RoutePersonEdit()) },
+                    )
+                }
                 entry<RoutePerson> { key ->
-                    PersonDetailScreen(state, vm, key.personId, onBack = { backStack.removeLastOrNull() })
+                    PersonDetailScreen(
+                        state,
+                        vm,
+                        key.personId,
+                        onBack = { backStack.removeLastOrNull() },
+                        onEdit = { backStack.add(RoutePersonEdit(key.personId)) },
+                    )
+                }
+                entry<RoutePersonEdit> { key ->
+                    PersonEditScreen(state, vm, key.personId, onBack = { backStack.removeLastOrNull() })
                 }
                 entry<RouteCategories> { CategoriesScreen(state, vm) { notify(it) } }
                 entry<RouteVault> {
-                    VaultScreen(vm, onSecureWindow, onAddCard = { backStack.add(RouteCardForm) })
+                    VaultScreen(state, vm, onSecureWindow, onAddCard = { backStack.add(RouteCardForm) })
                 }
                 entry<RouteCardForm> { CardFormScreen(state, vm, onSecureWindow) }
                 entry<RouteFiscal> { FiscalScreen(state, vm) }
@@ -282,12 +299,10 @@ fun AppRoot(
             onDismiss = { showComposer = false },
             onError = { notify(it) },
             onSaveExpense = { acc, cat, amt, note, at, income ->
-                vm.saveExpense(acc, cat, amt, note, at, income, onError = { notify(it) })
-                showComposer = false
+                vm.saveExpense(acc, cat, amt, note, at, income, onError = { notify(it) }, onOk = { showComposer = false })
             },
             onSaveTransfer = { from, to, amt, fee, note, at ->
-                vm.saveTransfer(from, to, amt, fee, note, at, onError = { notify(it) })
-                showComposer = false
+                vm.saveTransfer(from, to, amt, fee, note, at, onError = { notify(it) }, onOk = { showComposer = false })
             },
         )
     }
@@ -872,48 +887,42 @@ fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> U
     var name by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(CategoryKind.EXPENSE) }
     var iconKey by remember { mutableStateOf(SymbolIcons.customIconKeys.first()) }
-    var color by remember { mutableStateOf(0xFF1565C0L) }
-    val palette = listOf(0xFFE65100L, 0xFF1565C0L, 0xFF6A1B9AL, 0xFF2E7D32L, 0xFFC62828L, 0xFF00838FL, 0xFFAD1457L, 0xFF37474FL)
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    var color by remember { mutableStateOf(0xFF0B6E4FL) }
+    LazyColumn(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
             FinanceCard {
+                SectionLabel(stringResource(R.string.add_category))
                 FinanceTextField(name, { name = it }, label = stringResource(R.string.add_category))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ChoiceChip(kind == CategoryKind.EXPENSE, { kind = CategoryKind.EXPENSE }, stringResource(R.string.expense))
                     ChoiceChip(kind == CategoryKind.INCOME, { kind = CategoryKind.INCOME }, stringResource(R.string.income))
                 }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SymbolIcons.customIconKeys.forEach { key ->
-                    FilterChip(
-                        selected = iconKey == key,
-                        onClick = { iconKey = key },
-                        label = { Icon(SymbolIcons.byKey(key), null, Modifier.size(18.dp)) },
-                    )
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                palette.forEach { c ->
-                    FilterChip(
-                        selected = color == c,
-                        onClick = { color = c },
-                        label = { Box(Modifier.size(16.dp)) },
-                        leadingIcon = { Icon(SymbolIcons.Category, null, tint = Color(c or 0xFF000000)) },
-                    )
-                }
-            }
-            PrimaryWideButton(stringResource(R.string.save), onClick = {
-                if (name.isNotBlank()) {
-                    vm.addCustomCategory(name, iconKey, color, kind)
-                    name = ""
-                }
-            })
+                SectionLabel(stringResource(R.string.icon_pack))
+                ir.mhajisoft.miniaccountant.ui.components.IconPackPicker(iconKey) { iconKey = it }
+                SectionLabel(stringResource(R.string.color_pack))
+                ir.mhajisoft.miniaccountant.ui.components.ColorPackPicker(color) { color = it }
+                PrimaryWideButton(stringResource(R.string.save), onClick = {
+                    if (name.isNotBlank()) {
+                        vm.addCustomCategory(name, iconKey, color, kind)
+                        name = ""
+                    }
+                })
             }
         }
-        LazyColumn {
-            items(state.categories, key = { it.id }) { cat ->
-                ListItem(
-                    headlineContent = { Text(cat.name) },
-                    supportingContent = {
+        items(state.categories, key = { it.id }) { cat ->
+            FinanceCard {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(
+                        SymbolIcons.byKey(cat.iconKey),
+                        null,
+                        Modifier.size(28.dp),
+                        tint = Color(cat.color or 0xFF000000L),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(cat.name, style = MaterialTheme.typography.titleMedium)
                         Text(
                             when {
                                 cat.isSystem -> stringResource(R.string.system_category)
@@ -921,82 +930,106 @@ fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> U
                                 cat.kind == CategoryKind.INCOME -> stringResource(R.string.income)
                                 else -> stringResource(R.string.transfer)
                             },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    },
-                    leadingContent = { Icon(SymbolIcons.byKey(cat.iconKey), null, tint = Color(cat.color or 0xFF000000)) },
-                    trailingContent = {
-                        if (!cat.isSystem) {
-                            TextButton(onClick = {
-                                vm.deleteCustomCategory(cat.id) { onError(it) }
-                            }) { Text(stringResource(R.string.delete)) }
+                    }
+                    if (!cat.isSystem) {
+                        TextButton(onClick = { vm.deleteCustomCategory(cat.id) { onError(it) } }) {
+                            Text(stringResource(R.string.delete))
                         }
-                    },
-                )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun VaultScreen(vm: AppViewModel, onSecure: (Boolean) -> Unit, onAddCard: () -> Unit) {
+fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit, onAddCard: () -> Unit) {
     DisposableEffect(Unit) {
         onSecure(true)
         onDispose { onSecure(false) }
     }
     val cards by vm.vaultRepo.cardsFlow.collectAsStateWithLifecycle(emptyList())
     val ibans by vm.vaultRepo.bankAccountsFlow.collectAsStateWithLifecycle(emptyList())
-    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        Button(onClick = onAddCard) { Text(stringResource(R.string.new_card)) }
-        if (cards.isEmpty()) Text(stringResource(R.string.empty_cards))
+    val ownerLabel = stringResource(R.string.owner_me)
+    fun holderLabel(personId: String?): String {
+        if (personId.isNullOrBlank()) return ownerLabel
+        return state.people.firstOrNull { it.id == personId }?.displayName ?: ownerLabel
+    }
+    Column(
+        Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(stringResource(R.string.bank_info), style = MaterialTheme.typography.headlineSmall)
+        PrimaryWideButton(stringResource(R.string.new_card), onClick = onAddCard)
+        if (cards.isEmpty() && ibans.isEmpty()) {
+            FinanceEmptyState(SymbolIcons.Card, stringResource(R.string.empty_cards), stringResource(R.string.empty_cards_body))
+        }
         val activity = LocalContext.current as MainActivity
         val scope = rememberCoroutineScope()
         cards.forEach { c ->
-            val bank = vm.vaultRepo.directory.findByBin(c.bin6)
+            val logo = vm.vaultRepo.directory.logoOf(c.bin6, c.bankCode)
+            val bank = vm.vaultRepo.directory.findById(c.bankCode) ?: vm.vaultRepo.directory.findByBin(c.bin6)
             var revealed by remember(c.id) { mutableStateOf<String?>(null) }
-            ListItem(
-                headlineContent = { Text(revealed ?: CardMath.maskPan(c.last4.padStart(16, '*'))) },
-                supportingContent = {
-                    Text(bank?.nameFa ?: stringResource(R.string.unknown_bank))
-                },
-                leadingContent = { BankLogo(bank?.logoDrawable ?: "bank_unknown") },
-                trailingContent = {
+            FinanceCard {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BankLogo(logo)
+                    Column(Modifier.weight(1f)) {
+                        Text(revealed ?: CardMath.maskPan(c.last4.padStart(16, '*')), style = MaterialTheme.typography.titleMedium)
+                        Text(bank?.nameFa ?: stringResource(R.string.unknown_bank), style = MaterialTheme.typography.bodyMedium)
+                        Text(holderLabel(c.personId), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                if (c.panCipherId != null) {
                     TextButton(onClick = {
-                        val panId = c.panCipherId ?: return@TextButton
+                        val panId = c.panCipherId
                         activity.lockBeforePan {
                             activity.lifecycleScopeLaunch {
                                 revealed = vm.vaultRepo.decryptPan(panId)
                             }
                         }
                     }) { Text(stringResource(R.string.reveal_pan)) }
-                },
-            )
-            if (c.rememberCvv && c.cvvCipherId != null) {
-                TextButton(onClick = {
-                    activity.lifecycleScopeLaunch {
-                        val iv = vm.vaultRepo.secretVault.cvvIv(c.cvvCipherId!!) ?: return@lifecycleScopeLaunch
-                        val cipher = vm.vaultRepo.secretVault.createCvvDecryptCipher(iv)
-                        activity.promptUnlock(
-                            crypto = BiometricPrompt.CryptoObject(cipher),
-                            onSuccess = { result ->
-                                activity.lifecycleScopeLaunch {
-                                    val unlocked = result.cryptoObject?.cipher ?: cipher
-                                    val cvv = vm.vaultRepo.secretVault.revealCvv(c.cvvCipherId!!, unlocked) ?: return@lifecycleScopeLaunch
-                                    val cm = activity.getSystemService(ClipboardManager::class.java)
-                                    cm.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.cvv), cvv))
-                                    scope.launch {
-                                        delay(30_000)
-                                        cm.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
+                if (c.rememberCvv && c.cvvCipherId != null) {
+                    val cvvId = c.cvvCipherId
+                    TextButton(onClick = {
+                        activity.lifecycleScopeLaunch {
+                            val iv = vm.vaultRepo.secretVault.cvvIv(cvvId) ?: return@lifecycleScopeLaunch
+                            val cipher = vm.vaultRepo.secretVault.createCvvDecryptCipher(iv)
+                            activity.promptUnlock(
+                                crypto = BiometricPrompt.CryptoObject(cipher),
+                                onSuccess = { result ->
+                                    activity.lifecycleScopeLaunch {
+                                        val unlocked = result.cryptoObject?.cipher ?: cipher
+                                        val cvv = vm.vaultRepo.secretVault.revealCvv(cvvId, unlocked) ?: return@lifecycleScopeLaunch
+                                        val cm = activity.getSystemService(ClipboardManager::class.java)
+                                        cm.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.cvv), cvv))
+                                        scope.launch {
+                                            delay(30_000)
+                                            cm.setPrimaryClip(ClipData.newPlainText("", ""))
+                                        }
                                     }
-                                }
-                            },
-                            onCancel = {},
-                        )
-                    }
-                }) { Text(stringResource(R.string.reveal_cvv)) }
+                                },
+                                onCancel = {},
+                            )
+                        }
+                    }) { Text(stringResource(R.string.reveal_cvv)) }
+                }
             }
         }
         ibans.forEach { a ->
-            ListItem(headlineContent = { Text(IbanMath.formatGrouped(a.iban)) }, supportingContent = { Text(a.bankName) })
+            FinanceCard {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BankLogo(vm.vaultRepo.directory.findById(a.bankCode)?.logoDrawable ?: "bank_unknown")
+                    Column {
+                        Text(IbanMath.formatGrouped(a.iban), style = MaterialTheme.typography.titleSmall)
+                        Text(a.bankName, style = MaterialTheme.typography.bodyMedium)
+                        Text(holderLabel(a.personId), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
         }
     }
 }
@@ -1005,7 +1038,9 @@ fun VaultScreen(vm: AppViewModel, onSecure: (Boolean) -> Unit, onAddCard: () -> 
 fun BankLogo(drawableName: String) {
     val ctx = LocalContext.current
     val id = ctx.resources.getIdentifier(drawableName, "drawable", ctx.packageName)
-    if (id != 0) Image(painterResource(id), null, Modifier.size(40.dp))
+    val fallback = ctx.resources.getIdentifier("bank_unknown", "drawable", ctx.packageName)
+    val res = if (id != 0) id else fallback
+    if (res != 0) Image(painterResource(res), null, Modifier.size(40.dp))
 }
 
 @Composable
@@ -1015,19 +1050,37 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
         onDispose { onSecure(false) }
     }
     val activity = LocalContext.current as MainActivity
+    val today = remember { JalaliConverter.fromEpochMillis(System.currentTimeMillis()) }
     var pan by remember { mutableStateOf("") }
     var cvv by remember { mutableStateOf("") }
     var rememberCvv by remember { mutableStateOf(false) }
-    var expiryMonth by remember { mutableStateOf("1") }
-    var expiryYear by remember { mutableStateOf("1408") }
+    var expiryMonth by remember { mutableIntStateOf(today.month) }
+    var expiryYear by remember { mutableIntStateOf(today.year) }
     var iban by remember { mutableStateOf("") }
     var accountNumber by remember { mutableStateOf("") }
+    var holderPersonId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val digits = CardMath.normalizeDigits(pan)
     val match = if (digits.length >= 6) vm.vaultRepo.directory.resolvePan(digits) else BankMatch.Unknown
     val bank = (match as? BankMatch.Known)?.bank
-    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text(stringResource(R.string.card_form), style = MaterialTheme.typography.titleLarge)
+    val ownerAccount = state.settings.defaultAccountId
+        ?: state.accounts.firstOrNull { it.type != AccountType.PERSON && !it.archived }?.id
+    val person = state.people.firstOrNull { it.id == holderPersonId }
+    val ledgerAccountId = person?.accountId ?: ownerAccount
+    Column(
+        Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(stringResource(R.string.bank_info), style = MaterialTheme.typography.titleLarge)
+        FinanceCard {
+            SectionLabel(stringResource(R.string.assign_holder))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceChip(holderPersonId == null, { holderPersonId = null }, stringResource(R.string.owner_me))
+                state.people.forEach { p ->
+                    ChoiceChip(holderPersonId == p.id, { holderPersonId = p.id }, p.displayName)
+                }
+            }
+        }
         FinanceTextField(
             pan,
             { pan = it },
@@ -1036,7 +1089,14 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
             leadingIcon = { BankLogo(bank?.logoDrawable ?: "bank_unknown") },
         )
         if (digits.length >= 6) {
-            Text(bank?.let { it.nameFa + (it.formerNameFa?.let { f -> " — $f" } ?: "") } ?: stringResource(R.string.unknown_bank))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BankLogo(bank?.logoDrawable ?: "bank_unknown")
+                Text(bank?.nameFa ?: stringResource(R.string.unknown_bank))
+            }
+        }
+        ExpiryMonthYearPicker(expiryMonth, expiryYear) { m, y ->
+            expiryMonth = m
+            expiryYear = y
         }
         FinanceTextField(cvv, { cvv = it }, label = stringResource(R.string.cvv), keyboardType = KeyboardType.NumberPassword)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1044,15 +1104,13 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
             Text(stringResource(R.string.remember_cvv))
         }
         Text(stringResource(R.string.cvv_warning), style = MaterialTheme.typography.bodySmall)
-        FinanceTextField(expiryMonth, { expiryMonth = it }, label = stringResource(R.string.expiry), keyboardType = KeyboardType.Number)
-        FinanceTextField(expiryYear, { expiryYear = it }, label = stringResource(R.string.year), keyboardType = KeyboardType.Number)
-        val acc = state.accounts.firstOrNull { it.type == AccountType.CARD } ?: state.accounts.firstOrNull()
-        Button(onClick = {
+        PrimaryWideButton(stringResource(R.string.save), onClick = {
             if (!CardMath.luhnValid(pan)) {
                 error = activity.getString(R.string.invalid_luhn)
-                return@Button
+                return@PrimaryWideButton
             }
-            val accountId = acc?.id ?: return@Button
+            val accountId = ledgerAccountId ?: return@PrimaryWideButton
+            val holderName = person?.displayName ?: activity.getString(R.string.owner_me)
             if (rememberCvv && cvv.isNotBlank()) {
                 val cipher = vm.vaultRepo.secretVault.createCvvEncryptCipher()
                 activity.promptUnlock(
@@ -1063,12 +1121,13 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
                             vm.vaultRepo.saveCard(
                                 accountId = accountId,
                                 panAscii = pan,
-                                expiryMonth = expiryMonth.toIntOrNull() ?: 1,
-                                expiryYear = expiryYear.toIntOrNull() ?: 1408,
-                                holderName = null,
+                                expiryMonth = expiryMonth,
+                                expiryYear = expiryYear,
+                                holderName = holderName,
                                 rememberCvv = true,
                                 cvvAscii = cvv,
                                 encryptCvv = { ascii -> vm.vaultRepo.secretVault.persistCvv(unlocked, ascii) },
+                                personId = holderPersonId,
                             )
                         }
                     },
@@ -1081,19 +1140,19 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
                             vm.vaultRepo.saveCard(
                                 accountId = accountId,
                                 panAscii = pan,
-                                expiryMonth = expiryMonth.toIntOrNull() ?: 1,
-                                expiryYear = expiryYear.toIntOrNull() ?: 1408,
-                                holderName = null,
+                                expiryMonth = expiryMonth,
+                                expiryYear = expiryYear,
+                                holderName = holderName,
                                 rememberCvv = false,
                                 cvvAscii = null,
+                                personId = holderPersonId,
                             )
                         }
                     },
                     onCancel = {},
                 )
             }
-        }) { Text(stringResource(R.string.save)) }
-        Spacer(Modifier.height(16.dp))
+        })
         FinanceTextField(accountNumber, { accountNumber = it }, label = stringResource(R.string.account_number))
         FinanceTextField(
             IbanMath.formatGrouped(iban),
@@ -1103,22 +1162,21 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
         val ibanMatch = vm.vaultRepo.directory.resolveIban(iban)
         val ibanBank = (ibanMatch as? BankMatch.Known)?.bank
         if (IbanMath.normalize(iban).length >= 7) {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BankLogo(ibanBank?.logoDrawable ?: "bank_unknown")
                 Text(ibanBank?.nameFa ?: stringResource(R.string.unknown_bank))
             }
         }
-        Button(onClick = {
+        PrimaryWideButton(stringResource(R.string.save_iban), onClick = {
             if (!IbanMath.isValidIranIban(iban)) {
                 error = activity.getString(R.string.invalid_iban)
             } else {
-                val accountId = acc?.id
-                if (accountId == null) return@Button
+                val accountId = ledgerAccountId ?: return@PrimaryWideButton
                 activity.lifecycleScopeLaunch {
-                    vm.vaultRepo.saveBankAccount(accountId, accountNumber, iban)
+                    vm.vaultRepo.saveBankAccount(accountId, accountNumber, iban, personId = holderPersonId)
                 }
             }
-        }) { Text(stringResource(R.string.save_iban)) }
+        })
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
 }

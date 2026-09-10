@@ -40,6 +40,7 @@ class VaultRepository @Inject constructor(
         existingId: String? = null,
         encryptCvv: (suspend (String) -> String)? = null,
         storePan: Boolean = true,
+        personId: String? = null,
     ): Result<BankCard> {
         val digits = CardMath.normalizeDigits(panAscii)
         if (!CardMath.luhnValid(digits)) {
@@ -65,6 +66,7 @@ class VaultRepository @Inject constructor(
             panCipherId = panId,
             cvvCipherId = cvvId,
             rememberCvv = cvvId != null,
+            personId = personId,
         )
         cards.upsert(card.toEntity())
         return Result.success(card)
@@ -75,6 +77,7 @@ class VaultRepository @Inject constructor(
         accountNumber: String,
         ibanRaw: String,
         existing: BankAccount? = null,
+        personId: String? = null,
     ): Result<BankAccount> {
         if (!IbanMath.isValidIranIban(ibanRaw)) {
             return Result.failure(IllegalArgumentException("iban"))
@@ -89,6 +92,7 @@ class VaultRepository @Inject constructor(
             iban = compact,
             bankCode = bank?.id ?: sheba,
             bankName = bank?.nameFa ?: "بانک شناسایی نشد",
+            personId = personId,
         )
         bankAccounts.upsert(row.toEntity())
         return Result.success(row)

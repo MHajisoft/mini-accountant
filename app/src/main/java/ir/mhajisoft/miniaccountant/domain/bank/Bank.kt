@@ -29,6 +29,11 @@ data class BankDirectory(
 
     fun findByBin(bin6: String): BankInfo? = binIndex[bin6]
 
+    fun findById(id: String): BankInfo? = banks.firstOrNull { it.id == id || it.logoDrawable == id }
+
+    fun logoOf(bin6: String, bankCode: String): String =
+        findByBin(bin6)?.logoDrawable ?: findById(bankCode)?.logoDrawable ?: "bank_unknown"
+
     fun findBySheba(code3: String): BankInfo? = shebaIndex[code3]
 
     fun resolvePan(panDigits: String): BankMatch {

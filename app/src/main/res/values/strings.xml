@@ -155,4 +155,17 @@
     <string name="empty_reports_title">گزارشی برای این دوره نیست</string>
     <string name="empty_reports_body">با ثبت هزینه یا درآمد، نمودار دسته‌ها اینجا ساخته می‌شود.</string>
     <string name="empty_accounts_body">از فرم بالا یک حساب نقد، بانک یا کارت بسازید.</string>
+    <string name="first_name">نام</string>
+    <string name="last_name">نام خانوادگی</string>
+    <string name="email">ایمیل</string>
+    <string name="instagram">اینستاگرام</string>
+    <string name="telegram">تلگرام</string>
+    <string name="whatsapp">واتساپ</string>
+    <string name="avatar">نماد چهره</string>
+    <string name="icon_pack">آیکون</string>
+    <string name="color_pack">رنگ</string>
+    <string name="owner_me">مالک (خودم)</string>
+    <string name="assign_holder">متعلق به</string>
+    <string name="bank_info">اطلاعات بانکی</string>
+    <string name="empty_cards_body">کارت یا شبا را اینجا به خودتان یا یکی از افراد وصل کنید.</string>
 </resources>

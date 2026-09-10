@@ -248,22 +248,46 @@ class LedgerRepository @Inject constructor(
 
     suspend fun getTransfer(id: String): Transfer? = transfers.get(id)?.toDomain()
 
-    suspend fun createPerson(name: String, phone: String?, note: String?, color: Long): Person {
+    suspend fun createPerson(
+        firstName: String,
+        lastName: String,
+        phone: String?,
+        email: String?,
+        instagram: String?,
+        telegram: String?,
+        whatsapp: String?,
+        note: String?,
+        avatarColor: Long,
+    ): Person {
         val now = System.currentTimeMillis()
         val accountId = UUID.randomUUID().toString()
         val personId = UUID.randomUUID().toString()
+        val display = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "شخص" }
         val account = Account(
             id = accountId,
-            name = name,
+            name = display,
             type = AccountType.PERSON,
             includeInTotal = false,
             archived = false,
-            color = color,
+            color = avatarColor,
             sortOrder = 100,
             createdAt = now,
             updatedAt = now,
         )
-        val person = Person(personId, accountId, name, phone, note)
+        val person = Person(
+            id = personId,
+            accountId = accountId,
+            name = display,
+            phone = phone,
+            note = note,
+            firstName = firstName.trim(),
+            lastName = lastName.trim(),
+            email = email,
+            instagram = instagram,
+            telegram = telegram,
+            whatsapp = whatsapp,
+            avatarColor = avatarColor,
+        )
         writes.createPersonAtomic(account.toEntity(), person.toEntity())
         return person
     }
@@ -322,9 +346,10 @@ class LedgerRepository @Inject constructor(
     }
 
     suspend fun updatePersonProfile(person: Person) {
-        people.upsert(person.toEntity())
-        val acc = accounts.get(person.accountId) ?: return
-        accounts.update(acc.copy(name = person.name, updatedAt = System.currentTimeMillis()))
+        val named = person.copy(name = person.displayName)
+        people.upsert(named.toEntity())
+        val acc = accounts.get(named.accountId) ?: return
+        accounts.update(acc.copy(name = named.displayName, color = named.avatarColor, updatedAt = System.currentTimeMillis()))
     }
 
     suspend fun newExpenseOrIncome(
