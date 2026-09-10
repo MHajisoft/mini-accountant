@@ -7,10 +7,19 @@
         <item name="android:windowBackground">@color/brand_soft_background</item>
     </style>
 
+    <!--
+      Activity must use this theme (not Theme.Hesabres) or Android 12+ never
+      shows a branded splash. Pre-12 uses windowBackground = full artwork.
+      API 31+ uses the circular icon, then Compose BrandSplash shows the
+      1080x1920 حسابرس artwork.
+    -->
     <style name="Theme.Hesabres.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenBackground">@color/brand_primary</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_inset</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/brand_soft_background</item>
         <item name="postSplashScreenTheme">@style/Theme.Hesabres</item>
+        <item name="android:windowBackground">@drawable/splash_compat</item>
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:navigationBarColor">@color/brand_primary</item>
     </style>
 </resources>

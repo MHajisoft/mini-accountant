@@ -24,6 +24,12 @@ interface LedgerWriteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPerson(entity: PersonEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSocialLinks(entities: List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>)
+
+    @Query("DELETE FROM person_social_links WHERE personId = :personId")
+    suspend fun deleteSocialLinks(personId: String)
+
     @Query("DELETE FROM transactions WHERE transferId = :transferId")
     suspend fun deleteTxnsByTransfer(transferId: String)
 
@@ -43,8 +49,19 @@ interface LedgerWriteDao {
     }
 
     @Transaction
-    suspend fun createPersonAtomic(account: AccountEntity, person: PersonEntity) {
+    suspend fun createPersonAtomic(
+        account: AccountEntity,
+        person: PersonEntity,
+        links: List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>,
+    ) {
         insertAccount(account)
         insertPerson(person)
+        if (links.isNotEmpty()) insertSocialLinks(links)
+    }
+
+    @Transaction
+    suspend fun replacePersonSocials(personId: String, links: List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>) {
+        deleteSocialLinks(personId)
+        if (links.isNotEmpty()) insertSocialLinks(links)
     }
 }

@@ -26,6 +26,7 @@ import ir.mhajisoft.hesabres.domain.model.Person
 import ir.mhajisoft.hesabres.domain.money.Money
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -99,9 +100,12 @@ class AppViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val s = state.value.settings
+            val s = settingsStore.settings.first()
             val now = System.currentTimeMillis()
-            ledger.ensureSeeded(now, 1, 1)
+            ledger.ensureSystemCategories()
+            if (s.onboarded) {
+                ledger.ensureSeeded(now, s.fyStartMonth, s.fyStartDay)
+            }
         }
     }
 
@@ -115,7 +119,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             settingsStore.setFyStart(startMonth, startDay)
-            ledger.ensureSeeded(now, startMonth, startDay)
+            ledger.applyFiscalStart(now, startMonth, startDay)
             val account = Account(
                 id = UUID.randomUUID().toString(),
                 name = cashName.ifBlank { "نقد" },
@@ -150,7 +154,7 @@ class AppViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val ui = state.value
-            val resolved = ComposerRules.resolveLedgerAccountId(accountId, ui.accounts)
+            val resolved = ComposerRules.resolveSpendAccountId(accountId, ui.accounts)
             val err = ComposerRules.validate(
                 ComposerRules.Draft(
                     accountId = resolved.orEmpty(),
@@ -294,14 +298,12 @@ class AppViewModel @Inject constructor(
         lastName: String,
         phone: String?,
         email: String?,
-        instagram: String?,
-        telegram: String?,
-        whatsapp: String?,
         note: String?,
         avatarColor: Long,
+        socials: List<ir.mhajisoft.hesabres.domain.model.SocialLink>,
     ) {
         viewModelScope.launch {
-            ledger.createPerson(firstName, lastName, phone, email, instagram, telegram, whatsapp, note, avatarColor)
+            ledger.createPerson(firstName, lastName, phone, email, note, avatarColor, socials)
         }
     }
 
@@ -325,7 +327,12 @@ class AppViewModel @Inject constructor(
 
     fun archiveYear(id: String) { viewModelScope.launch { archive.archiveClosedYear(id) } }
 
-    fun closeCurrentYear() { viewModelScope.launch { ledger.closeCurrentAndStartNext(System.currentTimeMillis()) } }
+    fun closeCurrentYear() {
+        viewModelScope.launch {
+            val s = settingsStore.settings.first()
+            runCatching { ledger.closeCurrentAndStartNext(System.currentTimeMillis(), s.fyStartMonth, s.fyStartDay) }
+        }
+    }
 
     fun payPerson(personAccountId: String, amountDisplay: String, theyPay: Boolean, onError: (String) -> Unit = {}) {
         viewModelScope.launch {

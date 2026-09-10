@@ -125,6 +125,26 @@ data class PersonEntity(
 )
 
 @Entity(
+    tableName = "person_social_links",
+    indices = [Index("personId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = PersonEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["personId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class PersonSocialLinkEntity(
+    @PrimaryKey val id: String,
+    val personId: String,
+    val label: String,
+    val value: String,
+    val sortOrder: Int,
+)
+
+@Entity(
     tableName = "bank_cards",
     indices = [Index("accountId"), Index("personId")],
 )

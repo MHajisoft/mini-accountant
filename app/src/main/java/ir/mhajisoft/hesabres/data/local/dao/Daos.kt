@@ -208,6 +208,24 @@ interface PersonDao {
 }
 
 @Dao
+interface PersonSocialLinkDao {
+    @Query("SELECT * FROM person_social_links ORDER BY sortOrder, label")
+    fun observeAll(): Flow<List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>>
+
+    @Query("SELECT * FROM person_social_links")
+    suspend fun getAll(): List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>
+
+    @Query("SELECT * FROM person_social_links WHERE personId = :personId ORDER BY sortOrder")
+    suspend fun forPerson(personId: String): List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity>)
+
+    @Query("DELETE FROM person_social_links WHERE personId = :personId")
+    suspend fun deleteForPerson(personId: String)
+}
+
+@Dao
 interface BankCardDao {
     @Query("SELECT * FROM bank_cards ORDER BY last4")
     fun observeAll(): Flow<List<BankCardEntity>>

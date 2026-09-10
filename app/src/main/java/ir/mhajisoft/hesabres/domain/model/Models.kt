@@ -95,6 +95,14 @@ data class Category(
     val sortOrder: Int,
 )
 
+data class SocialLink(
+    val id: String,
+    val personId: String,
+    val label: String,
+    val value: String,
+    val sortOrder: Int = 0,
+)
+
 data class Person(
     val id: String,
     val accountId: String,
@@ -108,6 +116,7 @@ data class Person(
     val telegram: String? = null,
     val whatsapp: String? = null,
     val avatarColor: Long = 0xFF0F766E,
+    val socialLinks: List<SocialLink> = emptyList(),
 ) {
     val displayName: String
         get() = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").ifBlank { name }

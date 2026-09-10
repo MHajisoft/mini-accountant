@@ -3,6 +3,8 @@ package ir.mhajisoft.hesabres.domain.fiscal
 import ir.mhajisoft.hesabres.domain.jalali.BirashkAlgorithm
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
 import ir.mhajisoft.hesabres.domain.jalali.JalaliYmd
+import ir.mhajisoft.hesabres.domain.ledger.BalanceMath
+import ir.mhajisoft.hesabres.domain.ledger.SystemCategories
 import ir.mhajisoft.hesabres.domain.model.FiscalYear
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
 
@@ -84,6 +86,46 @@ object FiscalYearCalculator {
             isCurrent = isCurrent,
             closedAt = closedAt,
         )
+}
+
+/**
+ * Rules for first-year bootstrap and "close year / start next":
+ * - Default start is 1 Farvardin unless the user chose another month/day.
+ * - Opening balances are prior closings (or onboarding input), never sample rows.
+ * - Opening-balance *transactions* are display-only and must not be added again
+ *   on top of the openings table (that doubled every new year).
+ */
+object NewYearDefaults {
+    fun clampStart(year: Int, month: Int, day: Int): JalaliYmd {
+        val m = month.coerceIn(1, 12)
+        val d = day.coerceIn(1, BirashkAlgorithm.monthLength(year, m))
+        return JalaliYmd(year, m, d)
+    }
+
+    fun firstWindow(nowEpochMillis: Long, startMonth: Int, startDay: Int): FiscalWindow =
+        FiscalYearCalculator.windowContaining(nowEpochMillis, startMonth, startDay)
+
+    fun nextWindowAfter(
+        current: FiscalYear,
+        nowEpochMillis: Long,
+        startMonth: Int,
+        startDay: Int,
+    ): FiscalWindow {
+        var start = clampStart(current.startJalaliYear, startMonth, startDay)
+        var window = FiscalYearCalculator.windowStarting(start)
+        var guard = 0
+        while (window.startEpoch <= current.endEpoch && guard++ < 8) {
+            start = FiscalYearCalculator.nextStart(start)
+            window = FiscalYearCalculator.windowStarting(start)
+        }
+        val containing = FiscalYearCalculator.windowContaining(nowEpochMillis, startMonth, startDay)
+        return if (containing.startEpoch > current.startEpoch) containing else window
+    }
+
+    fun signedBalance(openingSigned: Long, liveTxns: List<LedgerTransaction>): Long {
+        val live = liveTxns.filter { it.categoryId != SystemCategories.OPENING_BALANCE_ID }
+        return BalanceMath.accountBalance(openingSigned, live, 0L)
+    }
 }
 
 data class RebucketResult(

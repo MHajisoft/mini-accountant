@@ -10,6 +10,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import ir.mhajisoft.hesabres.data.local.db.MiniAccountantDatabase
 import ir.mhajisoft.hesabres.data.local.db.MIGRATION_1_2
+import ir.mhajisoft.hesabres.data.local.db.MIGRATION_2_3
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Singleton
 
@@ -26,7 +27,7 @@ object DatabaseModule {
             MiniAccountantDatabase::class.java,
             file.absolutePath,
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()

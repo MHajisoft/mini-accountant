@@ -128,8 +128,10 @@ object JalaliConverter {
         var year = (ycycle + 474L + 2820L * cycle).toInt()
         if (year <= 0) year -= 1
         val yday = (jdn - jalaliToJdn(year, 1, 1) + 1).toInt()
-        val month = if (yday <= 186) ((yday - 1) / 31) + 1 else ((yday - 187) / 30) + 7
-        val day = (jdn - jalaliToJdn(year, month, 1) + 1).toInt()
+        val rawMonth = if (yday <= 186) ((yday - 1) / 31) + 1 else ((yday - 187) / 30) + 7
+        val month = rawMonth.coerceIn(1, 12)
+        val rawDay = (jdn - jalaliToJdn(year, month, 1) + 1).toInt()
+        val day = rawDay.coerceIn(1, BirashkAlgorithm.monthLength(year, month))
         return JalaliYmd(year, month, day)
     }
 

@@ -30,6 +30,7 @@ object DaoModule {
     @Provides @Singleton fun transactions(db: MiniAccountantDatabase): TransactionDao = db.transactions()
     @Provides @Singleton fun transfers(db: MiniAccountantDatabase): TransferDao = db.transfers()
     @Provides @Singleton fun people(db: MiniAccountantDatabase): PersonDao = db.people()
+    @Provides @Singleton fun socialLinks(db: MiniAccountantDatabase): ir.mhajisoft.hesabres.data.local.dao.PersonSocialLinkDao = db.socialLinks()
     @Provides @Singleton fun cards(db: MiniAccountantDatabase): BankCardDao = db.cards()
     @Provides @Singleton fun bankAccounts(db: MiniAccountantDatabase): BankAccountDao = db.bankAccounts()
     @Provides @Singleton fun openings(db: MiniAccountantDatabase): OpeningBalanceDao = db.openings()

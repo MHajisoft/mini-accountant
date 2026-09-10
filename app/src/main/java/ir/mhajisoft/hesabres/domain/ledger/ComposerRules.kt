@@ -9,6 +9,7 @@ import ir.mhajisoft.hesabres.domain.money.Money
 /**
  * Validates the add-transaction composer before any Room write.
  * Missing FY / account / category must never crash the UI.
+ * Expense/income require a cash/bank/card account — a lone person wallet is not enough.
  */
 object ComposerRules {
     const val ERR_NO_ACCOUNT = "حسابی برای ثبت تراکنش نیست. از «بیشتر» یک حساب بسازید."
@@ -33,8 +34,19 @@ object ComposerRules {
         val transfer: Boolean = false,
     )
 
+    fun liveAccounts(accounts: List<Account>): List<Account> = accounts.filter { !it.archived }
+
+    fun spendAccounts(accounts: List<Account>): List<Account> =
+        liveAccounts(accounts).filter { it.type != AccountType.PERSON }
+
+    fun resolveSpendAccountId(preferred: String, accounts: List<Account>): String? {
+        val spend = spendAccounts(accounts)
+        if (preferred.isNotBlank() && spend.any { it.id == preferred }) return preferred
+        return spend.firstOrNull()?.id
+    }
+
     fun resolveLedgerAccountId(preferred: String, accounts: List<Account>): String? {
-        val live = accounts.filter { !it.archived }
+        val live = liveAccounts(accounts)
         if (preferred.isNotBlank() && live.any { it.id == preferred }) return preferred
         return live.firstOrNull { it.type != AccountType.PERSON }?.id
             ?: live.firstOrNull()?.id
@@ -42,8 +54,7 @@ object ComposerRules {
 
     fun validate(draft: Draft): String? {
         if (draft.fiscalYear == null) return ERR_NO_FY
-        val live = draft.accounts.filter { !it.archived }
-        if (live.isEmpty()) return ERR_NO_ACCOUNT
+        val live = liveAccounts(draft.accounts)
         val amount = Money.parseDisplayAmount(draft.amountDisplay, draft.toman) ?: return ERR_AMOUNT
         if (amount <= 0L) return ERR_AMOUNT_ZERO
         if (draft.transfer) {
@@ -55,8 +66,10 @@ object ComposerRules {
             if (from == to) return ERR_SAME_ACCOUNTS
             return null
         }
-        val accountId = resolveLedgerAccountId(draft.accountId, draft.accounts) ?: return ERR_PICK_ACCOUNT
-        if (live.none { it.id == accountId }) return ERR_ACCOUNT_GONE
+        val spend = spendAccounts(draft.accounts)
+        if (spend.isEmpty()) return ERR_NO_ACCOUNT
+        val accountId = resolveSpendAccountId(draft.accountId, draft.accounts) ?: return ERR_PICK_ACCOUNT
+        if (spend.none { it.id == accountId }) return ERR_ACCOUNT_GONE
         if (draft.categoryId.isBlank() || draft.categories.none { it.id == draft.categoryId }) {
             return ERR_NO_CATEGORY
         }

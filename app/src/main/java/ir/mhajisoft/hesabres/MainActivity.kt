@@ -14,12 +14,18 @@ import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import ir.mhajisoft.hesabres.ui.AppRoot
+import ir.mhajisoft.hesabres.ui.BrandSplash
 import ir.mhajisoft.hesabres.ui.lock.LockScreen
 import ir.mhajisoft.hesabres.ui.theme.HesabresTheme
+import kotlinx.coroutines.delay
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -31,31 +37,44 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
+        val keepSystemSplash = AtomicBoolean(savedInstanceState == null)
+        splash.setKeepOnScreenCondition { keepSystemSplash.get() }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val coldStart = savedInstanceState == null
         setContent {
+            var showBrandSplash by remember { mutableStateOf(coldStart) }
             HesabresTheme {
-                val locked by lockController.locked.collectAsStateWithLifecycle()
-                if (locked) {
-                    BackHandler { finish() }
-                    LockScreen(
-                        onUnlock = { promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() }) },
-                    )
+                if (showBrandSplash) {
+                    BrandSplash()
                     LaunchedEffect(Unit) {
-                        promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() })
+                        keepSystemSplash.set(false)
+                        delay(1_250)
+                        showBrandSplash = false
                     }
                 } else {
-                    AppRoot(onSecureWindow = { secure ->
-                        if (secure) {
-                            window.setFlags(
-                                WindowManager.LayoutParams.FLAG_SECURE,
-                                WindowManager.LayoutParams.FLAG_SECURE,
-                            )
-                        } else {
-                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    val locked by lockController.locked.collectAsStateWithLifecycle()
+                    if (locked) {
+                        BackHandler { finish() }
+                        LockScreen(
+                            onUnlock = { promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() }) },
+                        )
+                        LaunchedEffect(Unit) {
+                            promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() })
                         }
-                    })
+                    } else {
+                        AppRoot(onSecureWindow = { secure ->
+                            if (secure) {
+                                window.setFlags(
+                                    WindowManager.LayoutParams.FLAG_SECURE,
+                                    WindowManager.LayoutParams.FLAG_SECURE,
+                                )
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            }
+                        })
+                    }
                 }
             }
         }

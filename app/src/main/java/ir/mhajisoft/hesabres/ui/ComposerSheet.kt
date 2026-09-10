@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -32,7 +34,6 @@ import ir.mhajisoft.hesabres.R
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
 import ir.mhajisoft.hesabres.domain.ledger.ComposerRules
 import ir.mhajisoft.hesabres.domain.ledger.SystemCategories
-import ir.mhajisoft.hesabres.domain.model.AccountType
 import ir.mhajisoft.hesabres.domain.model.CategoryKind
 import ir.mhajisoft.hesabres.ui.components.ChoiceChip
 import ir.mhajisoft.hesabres.ui.components.FinanceTextField
@@ -56,9 +57,9 @@ fun ComposerSheet(
     var mode by remember { mutableIntStateOf(initialMode.coerceIn(0, 2)) }
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val ledgerAccounts = remember(state.accounts) { state.accounts.filter { !it.archived } }
-    val spendAccounts = remember(ledgerAccounts) { ledgerAccounts.filter { it.type != AccountType.PERSON } }
-    val lastAcc = ComposerRules.resolveLedgerAccountId(
+    val ledgerAccounts = remember(state.accounts) { ComposerRules.liveAccounts(state.accounts) }
+    val spendAccounts = remember(ledgerAccounts) { ComposerRules.spendAccounts(ledgerAccounts) }
+    val lastAcc = ComposerRules.resolveSpendAccountId(
         state.settings.lastAccountId ?: state.settings.defaultAccountId.orEmpty(),
         ledgerAccounts,
     )
@@ -83,6 +84,7 @@ fun ComposerSheet(
     var at by remember { mutableStateOf(System.currentTimeMillis()) }
     var pick by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -95,6 +97,7 @@ fun ComposerSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .imePadding()
+                .heightIn(max = maxSheetHeight)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -143,10 +146,13 @@ fun ComposerSheet(
                     }
                 }
                 FinanceTextField(note, { note = it }, label = stringResource(R.string.note))
-                PrimaryWideButton(stringResource(R.string.save), onClick = {
+                PrimaryWideButton(
+                    stringResource(R.string.save),
+                    enabled = spendAccounts.isNotEmpty() && cats.isNotEmpty(),
+                    onClick = {
                     val err = ComposerRules.validate(
                         ComposerRules.Draft(
-                            accountId = accountId,
+                            accountId = ComposerRules.resolveSpendAccountId(accountId, ledgerAccounts).orEmpty(),
                             categoryId = catId,
                             amountDisplay = amount,
                             toman = state.settings.displayToman,
@@ -157,7 +163,7 @@ fun ComposerSheet(
                     )
                     if (err != null) onError(err) else {
                         onSaveExpense(
-                            ComposerRules.resolveLedgerAccountId(accountId, ledgerAccounts).orEmpty(),
+                            ComposerRules.resolveSpendAccountId(accountId, ledgerAccounts).orEmpty(),
                             catId,
                             amount,
                             note,
@@ -181,7 +187,10 @@ fun ComposerSheet(
                 }
                 FinanceTextField(fee, { fee = it }, label = stringResource(R.string.fee_optional), keyboardType = KeyboardType.Number)
                 FinanceTextField(note, { note = it }, label = stringResource(R.string.note))
-                PrimaryWideButton(stringResource(R.string.save), onClick = {
+                PrimaryWideButton(
+                    stringResource(R.string.save),
+                    enabled = ledgerAccounts.size >= 2,
+                    onClick = {
                     val err = ComposerRules.validate(
                         ComposerRules.Draft(
                             accountId = accountId,
