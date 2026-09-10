@@ -46,7 +46,7 @@ import ir.mhajisoft.miniaccountant.data.local.entity.TransferEntity
         BackupMetadataEntity::class,
         SecretBlobEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class MiniAccountantDatabase : RoomDatabase() {
@@ -67,6 +67,6 @@ abstract class MiniAccountantDatabase : RoomDatabase() {
 
     companion object {
         const val FILE_NAME = "mini_accountant.db"
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
     }
 }

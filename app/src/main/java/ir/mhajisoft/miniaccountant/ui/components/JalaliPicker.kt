@@ -2,13 +2,14 @@ package ir.mhajisoft.miniaccountant.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import ir.mhajisoft.miniaccountant.domain.jalali.JalaliLabels
 import ir.mhajisoft.miniaccountant.domain.jalali.JalaliYmd
 import ir.mhajisoft.miniaccountant.domain.money.PersianDigits
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun JalaliDatePickerDialog(
     initial: JalaliYmd,
@@ -40,45 +42,61 @@ fun JalaliDatePickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(JalaliYmd(year, month, day)) }) { Text(stringResource(R.string.ok)) }
+            TextButton(onClick = { onConfirm(JalaliYmd(year, month, day.coerceAtMost(maxDay))) }) {
+                Text(stringResource(R.string.ok))
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
         title = { Text(stringResource(R.string.pick_date)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { year -= 1 }) { Text("−") }
-                    Text(PersianDigits.toPersian(year.toString()), modifier = Modifier.padding(top = 12.dp))
+                    Text(PersianDigits.toPersian(year.toString()))
                     TextButton(onClick = { year += 1 }) { Text("+") }
                 }
-                LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxWidth()) {
-                    items(12) { i ->
-                        val m = i + 1
-                        FilterChip(
-                            selected = month == m,
-                            onClick = { month = m },
-                            label = { Text(JalaliLabels.monthName(m)) },
-                        )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..12).forEach { m ->
+                        ChoiceChip(month == m, { month = m }, JalaliLabels.monthName(m))
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    repeat(maxDay.coerceAtMost(10)) { }
-                }
-                LazyVerticalGrid(columns = GridCells.Adaptive(40.dp)) {
-                    items(maxDay) { i ->
-                        val d = i + 1
-                        FilterChip(
-                            selected = day == d,
-                            onClick = { day = d },
-                            label = { Text(PersianDigits.toPersian(d.toString())) },
-                        )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..maxDay).forEach { d ->
+                        ChoiceChip(day == d, { day = d }, PersianDigits.toPersian(d.toString()))
                     }
                 }
             }
         },
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ExpiryMonthYearPicker(
+    month: Int,
+    year: Int,
+    onChange: (Int, Int) -> Unit,
+) {
+    val today = remember { JalaliConverter.fromEpochMillis(System.currentTimeMillis()) }
+    val years = remember(today.year) { (today.year..(today.year + 10)).toList() }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel(stringResource(R.string.expiry))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..12).forEach { m ->
+                ChoiceChip(month == m, { onChange(m, year) }, JalaliLabels.monthName(m))
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            years.forEach { y ->
+                ChoiceChip(year == y, { onChange(month, y) }, PersianDigits.toPersian(y.toString()))
+            }
+        }
+    }
 }
 
 fun formatJalali(epoch: Long): String {

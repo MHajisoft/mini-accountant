@@ -30,38 +30,54 @@ object SymbolIcons {
     val Category = roundedSymbol("category") { category() }
     val Card = roundedSymbol("card") { card() }
 
+    fun byKey(key: String): ImageVector = cache.getOrPut(key) {
+        when (key) {
+            "restaurant", "local_dining", "coffee" -> roundedSymbol("restaurant") { dining() }
+            "directions_car", "fuel" -> roundedSymbol("car") { car() }
+            "home" -> Home
+            "bolt", "wifi" -> roundedSymbol("bolt") { bolt() }
+            "health_and_safety", "spa" -> roundedSymbol("health") { health() }
+            "school", "menu_book" -> roundedSymbol("school") { school() }
+            "checkroom" -> roundedSymbol("checkroom") { checkroom() }
+            "sports_esports" -> roundedSymbol("games") { games() }
+            "shopping_bag" -> roundedSymbol("bag") { bag() }
+            "flight" -> roundedSymbol("flight") { flight() }
+            "family_restroom", "child_care", "people" -> People
+            "policy" -> roundedSymbol("policy") { shield() }
+            "volunteer_activism" -> roundedSymbol("charity") { favorite() }
+            "handyman" -> roundedSymbol("repair") { build() }
+            "more_horiz" -> More
+            "payments", "add_card", "work" -> Card
+            "storefront" -> roundedSymbol("store") { store() }
+            "card_giftcard" -> roundedSymbol("gift") { gift() }
+            "trending_up", "star" -> roundedSymbol("trend") { trend() }
+            "swap_horiz" -> swap()
+            "receipt_long" -> Receipt
+            "account_balance", "wallet" -> Wallet
+            "phone" -> roundedSymbol("phone") { phone() }
+            "pets" -> roundedSymbol("pets") { pets() }
+            "music_note" -> roundedSymbol("music") { music() }
+            "water_drop" -> roundedSymbol("water") { water() }
+            else -> Category
+        }
+    }
+
     val customIconKeys = listOf(
-        "restaurant", "directions_car", "home", "bolt", "health_and_safety",
-        "school", "checkroom", "sports_esports", "shopping_bag", "flight",
-        "family_restroom", "policy", "volunteer_activism", "handyman",
-        "more_horiz", "payments", "storefront", "card_giftcard", "trending_up",
+        "restaurant", "coffee", "directions_car", "fuel", "home", "bolt",
+        "health_and_safety", "spa", "school", "menu_book", "checkroom",
+        "sports_esports", "shopping_bag", "flight", "family_restroom",
+        "child_care", "policy", "volunteer_activism", "handyman", "more_horiz",
+        "payments", "work", "storefront", "card_giftcard", "trending_up",
+        "star", "phone", "pets", "music_note", "water_drop", "wifi", "account_balance",
     )
 
-    fun byKey(key: String): ImageVector = when (key) {
-        "restaurant", "local_dining" -> roundedSymbol("restaurant") { dining() }
-        "directions_car" -> roundedSymbol("car") { car() }
-        "home" -> Home
-        "bolt" -> roundedSymbol("bolt") { bolt() }
-        "health_and_safety" -> roundedSymbol("health") { health() }
-        "school" -> roundedSymbol("school") { school() }
-        "checkroom" -> roundedSymbol("checkroom") { checkroom() }
-        "sports_esports" -> roundedSymbol("games") { games() }
-        "shopping_bag" -> roundedSymbol("bag") { bag() }
-        "flight" -> roundedSymbol("flight") { flight() }
-        "family_restroom" -> People
-        "policy" -> roundedSymbol("policy") { shield() }
-        "volunteer_activism" -> roundedSymbol("charity") { favorite() }
-        "handyman" -> roundedSymbol("repair") { build() }
-        "more_horiz" -> More
-        "payments", "add_card" -> Card
-        "storefront" -> roundedSymbol("store") { store() }
-        "card_giftcard" -> roundedSymbol("gift") { gift() }
-        "trending_up" -> roundedSymbol("trend") { trend() }
-        "swap_horiz" -> swap()
-        "receipt_long" -> Receipt
-        "account_balance" -> Wallet
-        else -> Category
-    }
+    val colorPack = listOf(
+        0xFF0B6E4FL, 0xFFB42318L, 0xFF1F3A5FL, 0xFFCA8A04L, 0xFF7C3AEDL,
+        0xFFEA580CL, 0xFF0D9488L, 0xFFDB2777L, 0xFF0284C7L, 0xFF16A34AL,
+        0xFF9A3412L, 0xFF57534EL, 0xFF4F46E5L, 0xFFE11D48L, 0xFF334155L, 0xFF0F766EL,
+    )
+
+    private val cache = mutableMapOf<String, ImageVector>()
 
     private fun roundedSymbol(name: String, add: ImageVector.Builder.() -> Unit): ImageVector {
         val builder = ImageVector.Builder(
@@ -216,6 +232,39 @@ object SymbolIcons {
         curveTo(2f, 19.1f, 2.9f, 20f, 4f, 20f); horizontalLineTo(20f); curveTo(21.1f, 20f, 22f, 19.1f, 22f, 18f)
         verticalLineTo(6f); curveTo(22f, 4.9f, 21.1f, 4f, 20f, 4f); close()
         moveTo(20f, 18f); horizontalLineTo(4f); verticalLineTo(12f); horizontalLineTo(20f); close()
+    }
+
+    private fun ImageVector.Builder.phone() = p {
+        moveTo(6.6f, 10.8f); curveTo(7.8f, 13.1f, 9.7f, 15f, 12f, 16.2f); lineTo(13.8f, 14.4f)
+        curveTo(14f, 14.2f, 14.3f, 14.1f, 14.6f, 14.2f); curveTo(15.6f, 14.5f, 16.7f, 14.7f, 17.8f, 14.7f)
+        curveTo(18.3f, 14.7f, 18.8f, 15.2f, 18.8f, 15.7f); verticalLineTo(18.6f)
+        curveTo(18.8f, 19.1f, 18.3f, 19.6f, 17.8f, 19.6f); curveTo(9.6f, 19.6f, 3f, 13f, 3f, 4.8f)
+        curveTo(3f, 4.3f, 3.5f, 3.8f, 4f, 3.8f); horizontalLineTo(6.9f); curveTo(7.4f, 3.8f, 7.9f, 4.3f, 7.9f, 4.8f)
+        curveTo(7.9f, 5.9f, 8.1f, 7f, 8.4f, 8f); curveTo(8.5f, 8.3f, 8.4f, 8.6f, 8.2f, 8.8f); close()
+    }
+
+    private fun ImageVector.Builder.pets() = p {
+        moveTo(4.5f, 9f); curveTo(5.3f, 9f, 6f, 8.3f, 6f, 7.5f); curveTo(6f, 6.7f, 5.3f, 6f, 4.5f, 6f)
+        curveTo(3.7f, 6f, 3f, 6.7f, 3f, 7.5f); curveTo(3f, 8.3f, 3.7f, 9f, 4.5f, 9f); close()
+        moveTo(9f, 6f); curveTo(9.8f, 6f, 10.5f, 5.3f, 10.5f, 4.5f); curveTo(10.5f, 3.7f, 9.8f, 3f, 9f, 3f)
+        curveTo(8.2f, 3f, 7.5f, 3.7f, 7.5f, 4.5f); curveTo(7.5f, 5.3f, 8.2f, 6f, 9f, 6f); close()
+        moveTo(15f, 6f); curveTo(15.8f, 6f, 16.5f, 5.3f, 16.5f, 4.5f); curveTo(16.5f, 3.7f, 15.8f, 3f, 15f, 3f)
+        curveTo(14.2f, 3f, 13.5f, 3.7f, 13.5f, 4.5f); curveTo(13.5f, 5.3f, 14.2f, 6f, 15f, 6f); close()
+        moveTo(19.5f, 9f); curveTo(20.3f, 9f, 21f, 8.3f, 21f, 7.5f); curveTo(21f, 6.7f, 20.3f, 6f, 19.5f, 6f)
+        curveTo(18.7f, 6f, 18f, 6.7f, 18f, 7.5f); curveTo(18f, 8.3f, 18.7f, 9f, 19.5f, 9f); close()
+        moveTo(12f, 14f); curveTo(9f, 14f, 6.5f, 16f, 6.5f, 21f); horizontalLineTo(17.5f)
+        curveTo(17.5f, 16f, 15f, 14f, 12f, 14f); close()
+    }
+
+    private fun ImageVector.Builder.music() = p {
+        moveTo(12f, 3f); verticalLineTo(13.6f); curveTo(11.4f, 13.2f, 10.7f, 13f, 10f, 13f)
+        curveTo(8.3f, 13f, 7f, 14.3f, 7f, 16f); curveTo(7f, 17.7f, 8.3f, 19f, 10f, 19f)
+        curveTo(11.7f, 19f, 13f, 17.7f, 13f, 16f); verticalLineTo(7f); horizontalLineTo(17f); verticalLineTo(3f); close()
+    }
+
+    private fun ImageVector.Builder.water() = p {
+        moveTo(12f, 2f); curveTo(12f, 2f, 6f, 9f, 6f, 13f); curveTo(6f, 16.3f, 8.7f, 19f, 12f, 19f)
+        curveTo(15.3f, 19f, 18f, 16.3f, 18f, 13f); curveTo(18f, 9f, 12f, 2f, 12f, 2f); close()
     }
 
     private fun ImageVector.Builder.trend() = p {

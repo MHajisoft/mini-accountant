@@ -115,11 +115,18 @@ data class PersonEntity(
     val name: String,
     val phone: String?,
     val note: String?,
+    val firstName: String = "",
+    val lastName: String = "",
+    val email: String? = null,
+    val instagram: String? = null,
+    val telegram: String? = null,
+    val whatsapp: String? = null,
+    val avatarColor: Long = 0xFF0F766E,
 )
 
 @Entity(
     tableName = "bank_cards",
-    indices = [Index("accountId")],
+    indices = [Index("accountId"), Index("personId")],
 )
 data class BankCardEntity(
     @PrimaryKey val id: String,
@@ -133,11 +140,12 @@ data class BankCardEntity(
     val panCipherId: String?,
     val cvvCipherId: String?,
     val rememberCvv: Boolean,
+    val personId: String? = null,
 )
 
 @Entity(
     tableName = "bank_accounts",
-    indices = [Index("accountId")],
+    indices = [Index("accountId"), Index("personId")],
 )
 data class BankAccountEntity(
     @PrimaryKey val id: String,
@@ -146,6 +154,7 @@ data class BankAccountEntity(
     val iban: String,
     val bankCode: String,
     val bankName: String,
+    val personId: String? = null,
 )
 
 @Entity(

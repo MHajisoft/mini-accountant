@@ -101,7 +101,29 @@ data class Person(
     val name: String,
     val phone: String?,
     val note: String?,
-)
+    val firstName: String = "",
+    val lastName: String = "",
+    val email: String? = null,
+    val instagram: String? = null,
+    val telegram: String? = null,
+    val whatsapp: String? = null,
+    val avatarColor: Long = 0xFF0F766E,
+) {
+    val displayName: String
+        get() = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").ifBlank { name }
+
+    val initials: String
+        get() {
+            val a = firstName.trim().firstOrNull()
+            val b = lastName.trim().firstOrNull()
+            return when {
+                a != null && b != null -> "$a$b"
+                a != null -> a.toString()
+                displayName.isNotBlank() -> displayName.take(1)
+                else -> "؟"
+            }
+        }
+}
 
 data class BankCard(
     val id: String,
@@ -115,6 +137,7 @@ data class BankCard(
     val panCipherId: String?,
     val cvvCipherId: String?,
     val rememberCvv: Boolean = false,
+    val personId: String? = null,
 )
 
 data class BankAccount(
@@ -124,6 +147,7 @@ data class BankAccount(
     val iban: String,
     val bankCode: String,
     val bankName: String,
+    val personId: String? = null,
 )
 
 data class FiscalYear(

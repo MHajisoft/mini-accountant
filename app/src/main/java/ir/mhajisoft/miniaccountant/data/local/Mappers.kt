@@ -74,19 +74,23 @@ fun Transfer.toEntity() = TransferEntity(
     id, fromAccountId, toAccountId, amount, fee, occurredAt, fiscalYearId, note,
 )
 
-fun PersonEntity.toDomain() = Person(id, accountId, name, phone, note)
-fun Person.toEntity() = PersonEntity(id, accountId, name, phone, note)
+fun PersonEntity.toDomain() = Person(
+    id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
+)
+fun Person.toEntity() = PersonEntity(
+    id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
+)
 
 fun BankCardEntity.toDomain() = BankCard(
-    id, accountId, last4, bin6, bankCode, expiryMonth, expiryYear, holderName, panCipherId, cvvCipherId, rememberCvv,
+    id, accountId, last4, bin6, bankCode, expiryMonth, expiryYear, holderName, panCipherId, cvvCipherId, rememberCvv, personId,
 )
 
 fun BankCard.toEntity() = BankCardEntity(
-    id, accountId, last4, bin6, bankCode, expiryMonth, expiryYear, holderName, panCipherId, cvvCipherId, rememberCvv,
+    id, accountId, last4, bin6, bankCode, expiryMonth, expiryYear, holderName, panCipherId, cvvCipherId, rememberCvv, personId,
 )
 
-fun BankAccountEntity.toDomain() = BankAccount(id, accountId, accountNumber, iban, bankCode, bankName)
-fun BankAccount.toEntity() = BankAccountEntity(id, accountId, accountNumber, iban, bankCode, bankName)
+fun BankAccountEntity.toDomain() = BankAccount(id, accountId, accountNumber, iban, bankCode, bankName, personId)
+fun BankAccount.toEntity() = BankAccountEntity(id, accountId, accountNumber, iban, bankCode, bankName, personId)
 
 fun AccountOpeningBalanceEntity.toDomain() = AccountOpeningBalance(fiscalYearId, accountId, amountSigned)
 fun AccountOpeningBalance.toEntity() = AccountOpeningBalanceEntity(fiscalYearId, accountId, amountSigned)
