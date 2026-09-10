@@ -336,6 +336,22 @@ class ComposerRulesTest {
     }
 
     @Test
+    fun personWalletAloneIsNotASpendAccount() {
+        val person = cash.copy(id = "p", type = AccountType.PERSON, name = "علی")
+        assertThat(ComposerRules.validate(draft(accounts = listOf(person))))
+            .isEqualTo(ComposerRules.ERR_NO_ACCOUNT)
+        assertThat(ComposerRules.resolveSpendAccountId(person.id, listOf(person))).isNull()
+    }
+
+    @Test
+    fun oneCashPlusPersonStillSavesAgainstCash() {
+        val person = cash.copy(id = "p", type = AccountType.PERSON, name = "علی")
+        assertThat(ComposerRules.validate(draft(accounts = listOf(cash, person)))).isNull()
+        assertThat(ComposerRules.resolveSpendAccountId("", listOf(cash, person))).isEqualTo("cash")
+        assertThat(ComposerRules.resolveSpendAccountId(person.id, listOf(cash, person))).isEqualTo("cash")
+    }
+
+    @Test
     fun emptyAccountsShowsPersianError() {
         assertThat(ComposerRules.validate(draft(accounts = emptyList())))
             .isEqualTo(ComposerRules.ERR_NO_ACCOUNT)
@@ -400,5 +416,60 @@ class PersonProfileTest {
     fun displayNameFallsBackToLegacyName() {
         val p = Person("id", "acc", "مینا", null, null)
         assertThat(p.displayName).isEqualTo("مینا")
+    }
+
+    @Test
+    fun legacySocialColumnsBecomeCustomLinks() {
+        val links = ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog.fromLegacyColumns(
+            personId = "p1",
+            instagram = "@ali",
+            telegram = "ali_t",
+            whatsapp = "0912",
+        )
+        assertThat(links.map { it.label }).containsExactly("اینستاگرام", "تلگرام", "واتساپ").inOrder()
+        assertThat(links.map { it.value }).containsExactly("@ali", "ali_t", "0912").inOrder()
+        val extra = ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog.sanitized(
+            links + ir.mhajisoft.hesabres.domain.model.SocialLink("", "p1", "ایتا", "ali_eitaa", 9),
+            "p1",
+        )
+        assertThat(extra.map { it.label }).contains("ایتا")
+        assertThat(extra.none { it.value.isBlank() }).isTrue()
+    }
+}
+
+class NewYearDefaultsTest {
+    @Test
+    fun nextJalaliYearStartsOnFarvardinUnlessCustomStart() {
+        val epoch = JalaliConverter.toEpochMillisStartOfDay(JalaliYmd(1405, 6, 15))
+        val current = FiscalYearCalculator.toModel(
+            "fy",
+            FiscalYearCalculator.defaultWindowFor(epoch),
+            isCurrent = true,
+        )
+        val next = ir.mhajisoft.hesabres.domain.fiscal.NewYearDefaults.nextWindowAfter(current, epoch, 1, 1)
+        assertThat(next.start).isEqualTo(JalaliYmd(1406, 1, 1))
+        assertThat(next.end.month).isEqualTo(12)
+        val mehr = ir.mhajisoft.hesabres.domain.fiscal.NewYearDefaults.nextWindowAfter(current, epoch, 7, 1)
+        assertThat(mehr.start).isEqualTo(JalaliYmd(1406, 7, 1))
+    }
+
+    @Test
+    fun openingTxnIsNotAddedOnTopOfOpeningRow() {
+        val openingRow = 1_000_000L
+        val openingTxn = LedgerTransaction(
+            "ob", "cash", ir.mhajisoft.hesabres.domain.ledger.SystemCategories.OPENING_BALANCE_ID,
+            null, 1_000_000, Direction.IN, "موجودی اول دوره", 1, 1405, 1, 1, "fy", null, 1,
+        )
+        val expense = openingTxn.copy(
+            id = "e",
+            categoryId = "sys-food",
+            amount = 100_000,
+            direction = Direction.OUT,
+        )
+        val signed = ir.mhajisoft.hesabres.domain.fiscal.NewYearDefaults.signedBalance(
+            openingRow,
+            listOf(openingTxn, expense),
+        )
+        assertThat(signed).isEqualTo(900_000L)
     }
 }

@@ -6,6 +6,7 @@ import ir.mhajisoft.hesabres.data.local.dao.FiscalYearDao
 import ir.mhajisoft.hesabres.data.local.dao.LedgerWriteDao
 import ir.mhajisoft.hesabres.data.local.dao.OpeningBalanceDao
 import ir.mhajisoft.hesabres.data.local.dao.PersonDao
+import ir.mhajisoft.hesabres.data.local.dao.PersonSocialLinkDao
 import ir.mhajisoft.hesabres.data.local.dao.SnapshotDao
 import ir.mhajisoft.hesabres.data.local.dao.TransactionDao
 import ir.mhajisoft.hesabres.data.local.dao.TransferDao
@@ -14,8 +15,8 @@ import ir.mhajisoft.hesabres.data.local.toDomain
 import ir.mhajisoft.hesabres.data.local.toEntity
 import ir.mhajisoft.hesabres.domain.fiscal.FiscalRebucketer
 import ir.mhajisoft.hesabres.domain.fiscal.FiscalYearCalculator
+import ir.mhajisoft.hesabres.domain.fiscal.NewYearDefaults
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
-import ir.mhajisoft.hesabres.domain.jalali.JalaliYmd
 import ir.mhajisoft.hesabres.domain.ledger.BalanceMath
 import ir.mhajisoft.hesabres.domain.ledger.CategoryCatalog
 import ir.mhajisoft.hesabres.domain.ledger.CategoryRules
@@ -32,7 +33,9 @@ import ir.mhajisoft.hesabres.domain.model.Direction
 import ir.mhajisoft.hesabres.domain.model.FiscalYear
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
 import ir.mhajisoft.hesabres.domain.model.Person
+import ir.mhajisoft.hesabres.domain.model.SocialLink
 import ir.mhajisoft.hesabres.domain.model.Transfer
+import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -54,6 +57,7 @@ class LedgerRepository @Inject constructor(
     private val txns: TransactionDao,
     private val transfers: TransferDao,
     private val people: PersonDao,
+    private val socialLinks: PersonSocialLinkDao,
     private val openings: OpeningBalanceDao,
     private val snapshots: SnapshotDao,
     private val writes: LedgerWriteDao,
@@ -71,7 +75,15 @@ class LedgerRepository @Inject constructor(
     }
     val allTxnsFlow: Flow<List<LedgerTransaction>> =
         txns.observeAll().map { list -> list.map { it.toDomain() } }
-    val peopleFlow: Flow<List<Person>> = people.observeAll().map { list -> list.map { it.toDomain() } }
+    val peopleFlow: Flow<List<Person>> = combine(
+        people.observeAll(),
+        socialLinks.observeAll(),
+    ) { persons, links ->
+        val byPerson = links.groupBy { it.personId }
+        persons.map { entity ->
+            entity.toDomain(byPerson[entity.id].orEmpty().map { it.toDomain() })
+        }
+    }
     val openingsFlow: Flow<Map<String, Long>> = combine(
         openings.observeAll(),
         fiscalYears.observeCurrent(),
@@ -95,6 +107,7 @@ class LedgerRepository @Inject constructor(
         accs.map { entity ->
             val account = entity.toDomain()
             val live = liveByAccount[account.id].orEmpty().map { it.toDomain() }
+                .filter { it.categoryId != SystemCategories.OPENING_BALANCE_ID }
             val opening = openingMap[account.id]
             val prior = if (opening != null) 0L else (snapMap[account.id] ?: 0L)
             val bal = BalanceMath.accountBalance(
@@ -117,6 +130,7 @@ class LedgerRepository @Inject constructor(
         val liveByAccount = txns.forYear(fyId).groupBy { it.accountId }
         return accs.map { entity ->
             val live = liveByAccount[entity.id].orEmpty().map { it.toDomain() }
+                .filter { it.categoryId != SystemCategories.OPENING_BALANCE_ID }
             AccountBalance(
                 entity.toDomain(),
                 BalanceMath.accountBalance(openingMap[entity.id] ?: 0L, live, 0L),
@@ -124,16 +138,11 @@ class LedgerRepository @Inject constructor(
         }
     }
 
-    suspend fun closeCurrentAndStartNext(now: Long): FiscalYear {
-        val current = fiscalYears.getCurrent() ?: error("no fiscal year")
-        val oldStart = JalaliYmd(current.startJalaliYear, current.startJalaliMonth, current.startJalaliDay)
-        val nextFromCycle = FiscalYearCalculator.windowStarting(FiscalYearCalculator.nextStart(oldStart))
-        val containing = FiscalYearCalculator.windowContaining(
-            now,
-            current.startJalaliMonth,
-            current.startJalaliDay,
-        )
-        val nextWindow = if (containing.startEpoch > current.startEpoch) containing else nextFromCycle
+    suspend fun closeCurrentAndStartNext(now: Long, startMonth: Int? = null, startDay: Int? = null): FiscalYear {
+        val current = fiscalYears.getCurrent() ?: error("سال مالی جاری پیدا نشد")
+        val month = startMonth ?: current.startJalaliMonth
+        val day = startDay ?: current.startJalaliDay
+        val nextWindow = NewYearDefaults.nextWindowAfter(current.toDomain(), now, month, day)
         val closings = balancesForYear(current.id)
         snapshots.upsertAll(
             closings.map { ab ->
@@ -157,18 +166,58 @@ class LedgerRepository @Inject constructor(
                     amountSigned = ab.balanceSigned,
                 ).toEntity(),
             )
+            OpeningBalancePoster.post(
+                accountId = ab.account.id,
+                amountSigned = ab.balanceSigned,
+                occurredAt = nextFy.startEpoch,
+                fiscalYearId = nextFy.id,
+            )?.let { txns.upsert(it.toEntity()) }
         }
         return nextFy
     }
 
     suspend fun ensureSeeded(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) {
+        ensureSystemCategories()
+        if (fiscalYears.getCurrent() == null && fiscalYears.getAll().isEmpty()) {
+            val window = NewYearDefaults.firstWindow(nowEpoch, fyStartMonth, fyStartDay)
+            val fy = FiscalYearCalculator.toModel(UUID.randomUUID().toString(), window, isCurrent = true)
+            fiscalYears.upsert(fy.toEntity())
+        }
+    }
+
+    suspend fun ensureSystemCategories() {
         if (categories.count() == 0) {
             categories.insertAll(CategoryCatalog.systemCategories().map { it.toEntity() })
         }
-        if (fiscalYears.getCurrent() == null && fiscalYears.getAll().isEmpty()) {
-            val window = FiscalYearCalculator.windowContaining(nowEpoch, fyStartMonth, fyStartDay)
+    }
+
+    /**
+     * Apply the user's FY start (default 1 Farvardin) when creating books.
+     * Onboarding used to no-op because init already inserted 1 Farvardin.
+     */
+    suspend fun applyFiscalStart(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) {
+        ensureSystemCategories()
+        val window = NewYearDefaults.firstWindow(nowEpoch, fyStartMonth, fyStartDay)
+        val current = fiscalYears.getCurrent()
+        if (current == null) {
             val fy = FiscalYearCalculator.toModel(UUID.randomUUID().toString(), window, isCurrent = true)
             fiscalYears.upsert(fy.toEntity())
+            return
+        }
+        if (txns.count() == 0) {
+            fiscalYears.upsert(
+                current.copy(
+                    label = window.label(),
+                    startJalaliYear = window.start.year,
+                    startJalaliMonth = window.start.month,
+                    startJalaliDay = window.start.day,
+                    endJalaliYear = window.end.year,
+                    endJalaliMonth = window.end.month,
+                    endJalaliDay = window.end.day,
+                    startEpoch = window.startEpoch,
+                    endEpoch = window.endEpoch,
+                ),
+            )
         }
     }
 
@@ -253,11 +302,9 @@ class LedgerRepository @Inject constructor(
         lastName: String,
         phone: String?,
         email: String?,
-        instagram: String?,
-        telegram: String?,
-        whatsapp: String?,
         note: String?,
         avatarColor: Long,
+        socials: List<SocialLink> = emptyList(),
     ): Person {
         val now = System.currentTimeMillis()
         val accountId = UUID.randomUUID().toString()
@@ -283,12 +330,13 @@ class LedgerRepository @Inject constructor(
             firstName = firstName.trim(),
             lastName = lastName.trim(),
             email = email,
-            instagram = instagram,
-            telegram = telegram,
-            whatsapp = whatsapp,
+            instagram = null,
+            telegram = null,
+            whatsapp = null,
             avatarColor = avatarColor,
+            socialLinks = SocialLinkCatalog.sanitized(socials, personId),
         )
-        writes.createPersonAtomic(account.toEntity(), person.toEntity())
+        writes.createPersonAtomic(account.toEntity(), person.toEntity(), person.socialLinks.map { it.toEntity() })
         return person
     }
 
@@ -346,8 +394,16 @@ class LedgerRepository @Inject constructor(
     }
 
     suspend fun updatePersonProfile(person: Person) {
-        val named = person.copy(name = person.displayName)
+        val links = SocialLinkCatalog.sanitized(person.socialLinks, person.id)
+        val named = person.copy(
+            name = person.displayName,
+            socialLinks = links,
+            instagram = null,
+            telegram = null,
+            whatsapp = null,
+        )
         people.upsert(named.toEntity())
+        writes.replacePersonSocials(named.id, links.map { it.toEntity() })
         val acc = accounts.get(named.accountId) ?: return
         accounts.update(acc.copy(name = named.displayName, color = named.avatarColor, updatedAt = System.currentTimeMillis()))
     }
@@ -362,7 +418,10 @@ class LedgerRepository @Inject constructor(
         personId: String? = null,
     ): LedgerTransaction {
         require(accountId.isNotBlank()) { ComposerRules.ERR_PICK_ACCOUNT }
-        accounts.get(accountId) ?: error(ComposerRules.ERR_ACCOUNT_GONE)
+        val account = accounts.get(accountId) ?: error(ComposerRules.ERR_ACCOUNT_GONE)
+        if (account.type == AccountType.PERSON.name) {
+            error(ComposerRules.ERR_NO_ACCOUNT)
+        }
         val fy = currentFiscalYear() ?: error(ComposerRules.ERR_NO_FY)
         val ymd = JalaliConverter.fromEpochMillis(occurredAt)
         val txn = LedgerTransaction(

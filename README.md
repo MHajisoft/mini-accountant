@@ -5,7 +5,7 @@ Personal daily ledger for Iranian users. Persian UI, RTL, Vazirmatn, amounts in 
 **حساباتت، تحت کنترل**
 
 Package / `applicationId`: `ir.mhajisoft.hesabres`  
-Debug: `ir.mhajisoft.hesabres.debug` (`حسابرس Debug`)
+Debug: `ir.mhajisoft.hesabres.debug` (visible name still **حسابرس**)
 
 This is a rename of Mini Accountant (حسابدار کوچک). The previous id `ir.mhajisoft.miniaccountant` is accepted only as a legacy backup `appId`. A new `applicationId` installs as a separate app.
 

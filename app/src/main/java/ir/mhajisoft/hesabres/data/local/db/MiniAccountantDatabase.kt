@@ -12,6 +12,7 @@ import ir.mhajisoft.hesabres.data.local.dao.FiscalYearDao
 import ir.mhajisoft.hesabres.data.local.dao.LedgerWriteDao
 import ir.mhajisoft.hesabres.data.local.dao.OpeningBalanceDao
 import ir.mhajisoft.hesabres.data.local.dao.PersonDao
+import ir.mhajisoft.hesabres.data.local.dao.PersonSocialLinkDao
 import ir.mhajisoft.hesabres.data.local.dao.SecretBlobDao
 import ir.mhajisoft.hesabres.data.local.dao.SnapshotDao
 import ir.mhajisoft.hesabres.data.local.dao.TransactionDao
@@ -26,6 +27,7 @@ import ir.mhajisoft.hesabres.data.local.entity.BankCardEntity
 import ir.mhajisoft.hesabres.data.local.entity.CategoryEntity
 import ir.mhajisoft.hesabres.data.local.entity.FiscalYearEntity
 import ir.mhajisoft.hesabres.data.local.entity.PersonEntity
+import ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity
 import ir.mhajisoft.hesabres.data.local.entity.SecretBlobEntity
 import ir.mhajisoft.hesabres.data.local.entity.TransactionEntity
 import ir.mhajisoft.hesabres.data.local.entity.TransferEntity
@@ -38,6 +40,7 @@ import ir.mhajisoft.hesabres.data.local.entity.TransferEntity
         TransactionEntity::class,
         TransferEntity::class,
         PersonEntity::class,
+        PersonSocialLinkEntity::class,
         BankCardEntity::class,
         BankAccountEntity::class,
         AccountOpeningBalanceEntity::class,
@@ -46,7 +49,7 @@ import ir.mhajisoft.hesabres.data.local.entity.TransferEntity
         BackupMetadataEntity::class,
         SecretBlobEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class MiniAccountantDatabase : RoomDatabase() {
@@ -56,6 +59,7 @@ abstract class MiniAccountantDatabase : RoomDatabase() {
     abstract fun transactions(): TransactionDao
     abstract fun transfers(): TransferDao
     abstract fun people(): PersonDao
+    abstract fun socialLinks(): PersonSocialLinkDao
     abstract fun cards(): BankCardDao
     abstract fun bankAccounts(): BankAccountDao
     abstract fun openings(): OpeningBalanceDao
@@ -67,6 +71,6 @@ abstract class MiniAccountantDatabase : RoomDatabase() {
 
     companion object {
         const val FILE_NAME = "mini_accountant.db"
-        const val SCHEMA_VERSION = 2
+        const val SCHEMA_VERSION = 3
     }
 }

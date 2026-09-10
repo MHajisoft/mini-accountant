@@ -169,4 +169,11 @@
     <string name="assign_holder">متعلق به</string>
     <string name="bank_info">اطلاعات بانکی</string>
     <string name="empty_cards_body">کارت یا شبا را اینجا به خودتان یا یکی از افراد وصل کنید.</string>
+    <string name="social_links">شبکه‌های اجتماعی و ارتباط</string>
+    <string name="social_links_hint">از پیشنهادها انتخاب کنید یا برچسب دلخواه بسازید. تعداد محدود نیست.</string>
+    <string name="social_label">عنوان</string>
+    <string name="social_value">شناسه یا پیوند</string>
+    <string name="social_custom_label">عنوان سفارشی</string>
+    <string name="add_social_link">افزودن پیوند</string>
+    <string name="close_year_hint">سال بعد از ۱ فروردین (یا شروع تنظیم‌شده) آغاز می‌شود و موجودی پایان دوره به اول دوره منتقل می‌شود. دادهٔ نمونه ساخته نمی‌شود.</string>
 </resources>

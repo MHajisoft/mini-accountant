@@ -21,6 +21,7 @@ fun LockScreen(onUnlock: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        ir.mhajisoft.hesabres.ui.BrandLogoFull(compact = true, modifier = Modifier.padding(bottom = 16.dp))
         Text(stringResource(R.string.unlock_title), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.unlock_subtitle), modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
         Button(onClick = onUnlock) { Text(stringResource(R.string.unlock)) }

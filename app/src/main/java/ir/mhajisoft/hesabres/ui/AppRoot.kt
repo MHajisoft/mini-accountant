@@ -326,7 +326,7 @@ fun OnboardingScreen(vm: AppViewModel) {
         Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
+        BrandOnboardingHeader()
         Text(
             stringResource(R.string.tagline),
             style = MaterialTheme.typography.titleMedium,
@@ -400,6 +400,7 @@ fun HomeScreen(
     var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
     var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { BrandTopBarLogo() }
         item {
             TonalCard {
                 Text(stringResource(R.string.total_balance), style = MaterialTheme.typography.labelLarge)
@@ -774,8 +775,11 @@ fun MoreScreen(open: (NavKey) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                BrandLogoFull(compact = true)
                 Text(
                     stringResource(R.string.tagline),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1231,6 +1235,8 @@ fun FiscalScreen(state: AppUiState, vm: AppViewModel) {
                 text = { Text(stringResource(R.string.confirm_rebucket)) },
             )
         }
+        Text(stringResource(R.string.close_year_hint), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
+        Button(onClick = { vm.closeCurrentYear() }) { Text(stringResource(R.string.close_year)) }
     }
 }
 

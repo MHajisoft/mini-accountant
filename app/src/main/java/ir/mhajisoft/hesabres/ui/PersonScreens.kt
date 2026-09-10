@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +47,9 @@ import ir.mhajisoft.hesabres.domain.model.BankCard
 import ir.mhajisoft.hesabres.domain.model.Direction
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
 import ir.mhajisoft.hesabres.domain.model.Person
+import ir.mhajisoft.hesabres.domain.model.SocialLink
+import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
+import ir.mhajisoft.hesabres.ui.components.ChoiceChip
 import ir.mhajisoft.hesabres.ui.components.ColorPackPicker
 import ir.mhajisoft.hesabres.ui.components.FinanceCard
 import ir.mhajisoft.hesabres.ui.components.FinanceEmptyState
@@ -124,8 +130,8 @@ fun PersonEditScreen(state: AppUiState, vm: AppViewModel, personId: String?, onB
     PersonEditForm(
         existing = existing,
         onBack = onBack,
-        onCreate = { first, last, phone, email, ig, tg, wa, note, color ->
-            vm.addPerson(first, last, phone, email, ig, tg, wa, note, color)
+        onCreate = { first, last, phone, email, note, color, socials ->
+            vm.addPerson(first, last, phone, email, note, color, socials)
             onBack()
         },
         onUpdate = {
@@ -135,23 +141,33 @@ fun PersonEditScreen(state: AppUiState, vm: AppViewModel, personId: String?, onB
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PersonEditForm(
     existing: Person?,
     onBack: () -> Unit,
-    onCreate: (String, String, String?, String?, String?, String?, String?, String?, Long) -> Unit,
+    onCreate: (String, String, String?, String?, String?, Long, List<SocialLink>) -> Unit,
     onUpdate: (Person) -> Unit,
 ) {
     var first by remember(existing?.id) { mutableStateOf(existing?.firstName?.ifBlank { existing.name } ?: "") }
     var last by remember(existing?.id) { mutableStateOf(existing?.lastName.orEmpty()) }
     var phone by remember(existing?.id) { mutableStateOf(existing?.phone.orEmpty()) }
     var email by remember(existing?.id) { mutableStateOf(existing?.email.orEmpty()) }
-    var ig by remember(existing?.id) { mutableStateOf(existing?.instagram.orEmpty()) }
-    var tg by remember(existing?.id) { mutableStateOf(existing?.telegram.orEmpty()) }
-    var wa by remember(existing?.id) { mutableStateOf(existing?.whatsapp.orEmpty()) }
     var note by remember(existing?.id) { mutableStateOf(existing?.note.orEmpty()) }
     var color by remember(existing?.id) { mutableLongStateOf(existing?.avatarColor ?: 0xFF0B6E4F) }
+    var socials by remember(existing?.id) {
+        mutableStateOf(
+            existing?.socialLinks?.map { it.label to it.value }?.ifEmpty { null }
+                ?: SocialLinkCatalog.fromLegacyColumns(
+                    existing?.id.orEmpty(),
+                    existing?.instagram,
+                    existing?.telegram,
+                    existing?.whatsapp,
+                ).map { it.label to it.value },
+        )
+    }
+    var customLabel by remember { mutableStateOf("") }
+    var customValue by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(if (existing == null) R.string.add_person else R.string.person_info)) },
@@ -183,19 +199,64 @@ fun PersonEditForm(
                 FinanceTextField(last, { last = it }, label = stringResource(R.string.last_name))
                 FinanceTextField(phone, { phone = it }, label = stringResource(R.string.phone), keyboardType = KeyboardType.Phone)
                 FinanceTextField(email, { email = it }, label = stringResource(R.string.email), keyboardType = KeyboardType.Email)
-                FinanceTextField(ig, { ig = it }, label = stringResource(R.string.instagram))
-                FinanceTextField(tg, { tg = it }, label = stringResource(R.string.telegram))
-                FinanceTextField(wa, { wa = it }, label = stringResource(R.string.whatsapp), keyboardType = KeyboardType.Phone)
                 FinanceTextField(note, { note = it }, label = stringResource(R.string.note), singleLine = false)
+            }
+            FinanceCard {
+                SectionLabel(stringResource(R.string.social_links))
+                Text(stringResource(R.string.social_links_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SocialLinkCatalog.suggestions.forEach { label ->
+                        ChoiceChip(false, {
+                            if (socials.none { it.first == label }) socials = socials + (label to "")
+                        }, label)
+                    }
+                }
+                socials.forEachIndexed { index, (label, value) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FinanceTextField(label, { newLabel ->
+                                socials = socials.toMutableList().also { it[index] = newLabel to value }
+                            }, label = stringResource(R.string.social_label))
+                            FinanceTextField(value, { newVal ->
+                                socials = socials.toMutableList().also { it[index] = label to newVal }
+                            }, label = stringResource(R.string.social_value))
+                        }
+                        TextButton(onClick = { socials = socials.toMutableList().also { it.removeAt(index) } }) {
+                            Text(stringResource(R.string.delete))
+                        }
+                    }
+                }
+                FinanceTextField(customLabel, { customLabel = it }, label = stringResource(R.string.social_custom_label))
+                FinanceTextField(customValue, { customValue = it }, label = stringResource(R.string.social_value))
+                SecondaryWideButton(stringResource(R.string.add_social_link)) {
+                    val label = customLabel.trim().ifBlank { "سایر" }
+                    val value = customValue.trim()
+                    if (value.isNotEmpty()) {
+                        socials = socials + (label to value)
+                        customLabel = ""
+                        customValue = ""
+                    } else if (customLabel.isNotBlank()) {
+                        socials = socials + (label to "")
+                        customLabel = ""
+                    }
+                }
             }
             PrimaryWideButton(stringResource(R.string.save), onClick = {
                 if (first.isBlank() && last.isBlank()) return@PrimaryWideButton
+                val links = socials.mapIndexed { i, pair ->
+                    SocialLink(
+                        id = existing?.socialLinks?.getOrNull(i)?.id.orEmpty(),
+                        personId = existing?.id.orEmpty(),
+                        label = pair.first,
+                        value = pair.second,
+                        sortOrder = i,
+                    )
+                }
                 if (existing == null) {
                     onCreate(
                         first.trim(), last.trim(),
                         phone.ifBlank { null }, email.ifBlank { null },
-                        ig.ifBlank { null }, tg.ifBlank { null }, wa.ifBlank { null },
-                        note.ifBlank { null }, color,
+                        note.ifBlank { null }, color, links,
                     )
                 } else {
                     onUpdate(
@@ -204,11 +265,12 @@ fun PersonEditForm(
                             lastName = last.trim(),
                             phone = phone.ifBlank { null },
                             email = email.ifBlank { null },
-                            instagram = ig.ifBlank { null },
-                            telegram = tg.ifBlank { null },
-                            whatsapp = wa.ifBlank { null },
+                            instagram = null,
+                            telegram = null,
+                            whatsapp = null,
                             note = note.ifBlank { null },
                             avatarColor = color,
+                            socialLinks = links,
                         ),
                     )
                 }
@@ -296,9 +358,9 @@ fun PersonDetailContent(
                 SectionLabel(stringResource(R.string.person_info))
                 if (!person.phone.isNullOrBlank()) LabeledRow(stringResource(R.string.phone), person.phone)
                 if (!person.email.isNullOrBlank()) LabeledRow(stringResource(R.string.email), person.email)
-                if (!person.instagram.isNullOrBlank()) LabeledRow(stringResource(R.string.instagram), person.instagram)
-                if (!person.telegram.isNullOrBlank()) LabeledRow(stringResource(R.string.telegram), person.telegram)
-                if (!person.whatsapp.isNullOrBlank()) LabeledRow(stringResource(R.string.whatsapp), person.whatsapp)
+                person.socialLinks.forEach { link ->
+                    LabeledRow(link.label, link.value)
+                }
                 if (!person.note.isNullOrBlank()) Text(person.note, style = MaterialTheme.typography.bodyMedium)
             }
             FinanceCard {

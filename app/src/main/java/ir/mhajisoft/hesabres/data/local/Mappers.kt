@@ -27,7 +27,10 @@ import ir.mhajisoft.hesabres.domain.model.CategoryKind
 import ir.mhajisoft.hesabres.domain.model.Direction
 import ir.mhajisoft.hesabres.domain.model.FiscalYear
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
+import ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity
 import ir.mhajisoft.hesabres.domain.model.Person
+import ir.mhajisoft.hesabres.domain.model.SocialLink
+import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
 import ir.mhajisoft.hesabres.domain.model.Transfer
 
 fun AccountEntity.toDomain() = Account(
@@ -74,12 +77,16 @@ fun Transfer.toEntity() = TransferEntity(
     id, fromAccountId, toAccountId, amount, fee, occurredAt, fiscalYearId, note,
 )
 
-fun PersonEntity.toDomain() = Person(
+fun PersonEntity.toDomain(links: List<SocialLink> = emptyList()) = Person(
     id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
+    socialLinks = SocialLinkCatalog.mergeVisible(id, links, instagram, telegram, whatsapp),
 )
 fun Person.toEntity() = PersonEntity(
     id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
 )
+
+fun PersonSocialLinkEntity.toDomain() = SocialLink(id, personId, label, value, sortOrder)
+fun SocialLink.toEntity() = PersonSocialLinkEntity(id, personId, label, value, sortOrder)
 
 fun BankCardEntity.toDomain() = BankCard(
     id, accountId, last4, bin6, bankCode, expiryMonth, expiryYear, holderName, panCipherId, cvvCipherId, rememberCvv, personId,
