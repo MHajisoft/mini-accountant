@@ -25,6 +25,7 @@ import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.domain.ledger.ComposerRules
 import ir.mhajisoft.hesabres.domain.model.Person
 import ir.mhajisoft.hesabres.domain.money.Money
+import ir.mhajisoft.hesabres.domain.people.SettleRules
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
@@ -359,37 +360,39 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun payPerson(personAccountId: String, amountDisplay: String, theyPay: Boolean, onError: (String) -> Unit = {}) {
+    fun payPerson(
+        personAccountId: String,
+        amountDisplay: String,
+        theyPay: Boolean,
+        onError: (String) -> Unit = {},
+        onDone: () -> Unit = {},
+    ) {
         viewModelScope.launch {
             val ui = state.value
-            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman)
-            if (amount == null) {
-                onError(ComposerRules.ERR_AMOUNT)
+            val ledgerAccounts = ui.accounts.filter { it.type != AccountType.PERSON }
+            val problem = SettleRules.validate(
+                amountDisplay = amountDisplay,
+                toman = ui.settings.displayToman,
+                personAccountId = personAccountId,
+                ledgerAccounts = ledgerAccounts,
+                preferredAccountId = ui.settings.defaultAccountId.orEmpty(),
+            )
+            if (problem != null) {
+                onError(problem)
                 return@launch
             }
-            if (amount <= 0L) {
-                onError(ComposerRules.ERR_AMOUNT_ZERO)
-                return@launch
-            }
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
             val other = ComposerRules.resolveLedgerAccountId(
                 ui.settings.defaultAccountId.orEmpty(),
-                ui.accounts.filter { it.type != AccountType.PERSON },
-            )
-            if (other == null) {
-                onError(ComposerRules.ERR_NO_ACCOUNT)
-                return@launch
-            }
-            if (other == personAccountId) {
-                onError(ComposerRules.ERR_SAME_ACCOUNTS)
-                return@launch
-            }
+                ledgerAccounts,
+            ) ?: return@launch
             runCatching {
                 if (theyPay) {
                     ledger.postTransfer(personAccountId, other, amount, null, System.currentTimeMillis(), "")
                 } else {
                     ledger.postTransfer(other, personAccountId, amount, null, System.currentTimeMillis(), "")
                 }
-            }.onFailure { onError(WriteFailures.map(it)) }
+            }.onSuccess { onDone() }.onFailure { onError(WriteFailures.map(it)) }
         }
     }
 

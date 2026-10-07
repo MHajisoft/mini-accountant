@@ -11,6 +11,16 @@ import ir.mhajisoft.hesabres.domain.bank.BankInfo
 import ir.mhajisoft.hesabres.domain.bank.BankMatch
 import ir.mhajisoft.hesabres.domain.bank.CardMath
 import ir.mhajisoft.hesabres.domain.bank.IbanMath
+import ir.mhajisoft.hesabres.domain.bank.VaultFieldError
+import ir.mhajisoft.hesabres.domain.bank.VaultInput
+import ir.mhajisoft.hesabres.domain.model.BankCard
+import ir.mhajisoft.hesabres.domain.people.ContactLinks
+import ir.mhajisoft.hesabres.domain.people.PersonFieldError
+import ir.mhajisoft.hesabres.domain.people.PersonListFilter
+import ir.mhajisoft.hesabres.domain.people.PersonProfileRules
+import ir.mhajisoft.hesabres.domain.people.PersonRoster
+import ir.mhajisoft.hesabres.domain.people.PersonVaultLinks
+import ir.mhajisoft.hesabres.domain.people.SettleRules
 import ir.mhajisoft.hesabres.domain.fiscal.FiscalRebucketer
 import ir.mhajisoft.hesabres.domain.fiscal.FiscalYearCalculator
 import ir.mhajisoft.hesabres.domain.jalali.BirashkAlgorithm
@@ -471,5 +481,97 @@ class NewYearDefaultsTest {
             listOf(openingTxn, expense),
         )
         assertThat(signed).isEqualTo(900_000L)
+    }
+}
+
+class PersonVaultRulesTest {
+    @Test
+    fun rosterFiltersDebtorsAndFindsPersianPhone() {
+        val ali = Person("p1", "a1", "علی", "09121234567", null, firstName = "علی", lastName = "رضایی", email = "a@b.co")
+        val mina = Person("p2", "a2", "مینا", null, null, firstName = "مینا", email = "mina@mail.com")
+        val zero = Person("p3", "a3", "رضا", null, null, firstName = "رضا")
+        val people = listOf(ali, mina, zero)
+        val balances = mapOf("a1" to 100L, "a2" to -50L, "a3" to 0L)
+        fun balance(person: Person) = balances[person.accountId] ?: 0L
+        assertThat(PersonRoster.visible(people, ::balance, "", PersonListFilter.DEBTOR).map { it.id })
+            .containsExactly("p1")
+        assertThat(PersonRoster.visible(people, ::balance, "", PersonListFilter.CREDITOR).map { it.id })
+            .containsExactly("p2")
+        assertThat(PersonRoster.visible(people, ::balance, "", PersonListFilter.SETTLED).map { it.id })
+            .containsExactly("p3")
+        assertThat(PersonRoster.visible(people, ::balance, "۰۹۱۲", PersonListFilter.ALL).map { it.id })
+            .containsExactly("p1")
+        assertThat(PersonRoster.contactLine(ali)).isEqualTo("09121234567")
+        assertThat(PersonRoster.contactLine(mina)).isEqualTo("mina@mail.com")
+        assertThat(PersonRoster.contactLine(zero)).isNull()
+        assertThat(PersonRoster.roleOf(0L)).isEqualTo(PersonListFilter.SETTLED)
+    }
+
+    @Test
+    fun contactLinksStayCopyOnlyForCustomLabels() {
+        assertThat(ContactLinks.dialUri("۰۹۱۲۱۲۳۴۵۶۷")).isEqualTo("tel:09121234567")
+        assertThat(ContactLinks.mailtoUri("ali@mail.com")).isEqualTo("mailto:ali@mail.com")
+        assertThat(ContactLinks.mailtoUri("not-an-email")).isNull()
+        assertThat(ContactLinks.openUri("تلگرام", "@ali_rezaei")).isEqualTo("https://t.me/ali_rezaei")
+        assertThat(ContactLinks.openUri("واتساپ", "09121234567")).isEqualTo("https://wa.me/989121234567")
+        assertThat(ContactLinks.openUri("سایر", "hello")).isNull()
+        assertThat(ContactLinks.openUri("وب‌سایت", "https://example.com")).isEqualTo("https://example.com")
+    }
+
+    @Test
+    fun profileRejectsBlankNameAndBadPhone() {
+        assertThat(PersonProfileRules.validate("", "  ", "", "")).isEqualTo(PersonFieldError.NAME)
+        assertThat(PersonProfileRules.validate("علی", "", "123", "")).isEqualTo(PersonFieldError.PHONE)
+        assertThat(PersonProfileRules.validate("علی", "", "09121234567", "bad")).isEqualTo(PersonFieldError.EMAIL)
+        assertThat(PersonProfileRules.validate("علی", "رضایی", "", "")).isNull()
+    }
+
+    @Test
+    fun vaultInputKeepsPanOptionalOnEdit() {
+        assertThat(
+            VaultInput.validateCard("6104330000000001", 6, 1408, false, "", editing = false, hasStoredCvv = false),
+        ).isEqualTo(VaultFieldError.PAN)
+        assertThat(
+            VaultInput.validateCard("", 6, 1408, false, "", editing = false, hasStoredCvv = false),
+        ).isEqualTo(VaultFieldError.PAN_REQUIRED)
+        assertThat(
+            VaultInput.validateCard("", 6, 1408, false, "", editing = true, hasStoredCvv = false),
+        ).isNull()
+        assertThat(
+            VaultInput.validateCard("", 6, 1408, true, "", editing = true, hasStoredCvv = false),
+        ).isEqualTo(VaultFieldError.CVV_REQUIRED)
+        assertThat(
+            VaultInput.validateCard("", 6, 1408, true, "12", editing = true, hasStoredCvv = true),
+        ).isEqualTo(VaultFieldError.CVV)
+        assertThat(
+            VaultInput.validateCard("", 13, 1408, false, "", editing = true, hasStoredCvv = false),
+        ).isEqualTo(VaultFieldError.EXPIRY)
+        assertThat(VaultInput.validateBankAccount("123", "IR120170000000123456789012")).isEqualTo(VaultFieldError.ACCOUNT)
+        assertThat(VaultInput.isValidAccountNumber("۱۲۳۴۵۶۷۸")).isTrue()
+    }
+
+    @Test
+    fun settleRejectsZeroAndSameAccount() {
+        val cash = Account("cash", "نقد", AccountType.CASH, color = 1, sortOrder = 0, createdAt = 0, updatedAt = 0)
+        assertThat(SettleRules.validate("0", false, "person", listOf(cash), "cash"))
+            .isEqualTo(ComposerRules.ERR_AMOUNT_ZERO)
+        assertThat(SettleRules.validate("", false, "person", listOf(cash), "cash"))
+            .isEqualTo(ComposerRules.ERR_AMOUNT)
+        assertThat(SettleRules.validate("1000", false, "cash", listOf(cash), "cash"))
+            .isEqualTo(ComposerRules.ERR_SAME_ACCOUNTS)
+        assertThat(SettleRules.validate("1000", false, "person", emptyList(), ""))
+            .isEqualTo(ComposerRules.ERR_NO_ACCOUNT)
+        assertThat(SettleRules.validate("1000", false, "person", listOf(cash), "cash")).isNull()
+    }
+
+    @Test
+    fun cardsStayLinkedToThePerson() {
+        val card = BankCard("c", "a1", "4331", "610433", "mellat", 1, 1408, null, null, null, false, "p1")
+        val other = card.copy(id = "o", personId = "p2", accountId = "a2")
+        val legacy = card.copy(id = "l", personId = null, accountId = "a1")
+        assertThat(PersonVaultLinks.cardLinked("p1", "a1", card)).isTrue()
+        assertThat(PersonVaultLinks.cardLinked("p1", "a1", other)).isFalse()
+        assertThat(PersonVaultLinks.cardLinked("p1", "a1", legacy)).isTrue()
+        assertThat(PersonVaultLinks.cardLinked("p1", "a1", legacy.copy(personId = "p9"))).isFalse()
     }
 }
