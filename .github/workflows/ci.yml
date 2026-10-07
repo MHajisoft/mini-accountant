@@ -21,6 +21,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google no longer publishes the obsolete `tools` package, which is
+          # still the v3 default (`tools platform-tools`) and fails sdkmanager.
+          packages: platform-tools
 
       - name: Install platforms
         run: |
