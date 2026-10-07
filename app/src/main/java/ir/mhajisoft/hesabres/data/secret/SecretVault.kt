@@ -12,6 +12,7 @@ import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import ir.mhajisoft.hesabres.data.local.dao.SecretBlobDao
 import ir.mhajisoft.hesabres.data.local.entity.SecretBlobEntity
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.util.UUID
 import javax.crypto.Cipher
@@ -65,19 +66,27 @@ class SecretVault @Inject constructor(
         return String(plain, Charsets.UTF_8)
     }
 
-    fun createCvvEncryptCipher(): Cipher {
-        ensureCvvKey()
-        val key = cvvKey()
-        val cipher = Cipher.getInstance(AES_GCM)
-        cipher.init(Cipher.ENCRYPT_MODE, key)
-        return cipher
+    fun createCvvEncryptCipher(): Cipher? = try {
+        if (!ensureCvvKey()) return null
+        val key = cvvKey() ?: return null
+        Cipher.getInstance(AES_GCM).also { it.init(Cipher.ENCRYPT_MODE, key) }
+    } catch (t: GeneralSecurityException) {
+        null
+    } catch (t: IllegalArgumentException) {
+        null
     }
 
-    fun createCvvDecryptCipher(iv: ByteArray): Cipher {
-        val key = cvvKey()
-        val cipher = Cipher.getInstance(AES_GCM)
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-        return cipher
+    fun createCvvDecryptCipher(iv: ByteArray): Cipher? {
+        val key = cvvKey() ?: return null
+        return try {
+            val cipher = Cipher.getInstance(AES_GCM)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+            cipher
+        } catch (t: GeneralSecurityException) {
+            null
+        } catch (t: IllegalArgumentException) {
+            null
+        }
     }
 
     suspend fun persistCvv(cipher: Cipher, cvvAscii: String): String {
@@ -97,8 +106,8 @@ class SecretVault @Inject constructor(
     }
 
     suspend fun revealCvv(id: String, unlockedCipher: Cipher): String? {
-        blobs.get(id) ?: return null
-        val plain = unlockedCipher.doFinal(blobs.get(id)!!.ciphertext)
+        val blob = blobs.get(id) ?: return null
+        val plain = unlockedCipher.doFinal(blob.ciphertext)
         return String(plain, Charsets.UTF_8)
     }
 
@@ -112,35 +121,44 @@ class SecretVault @Inject constructor(
         blobs.deleteAllCvv()
     }
 
-    private fun ensureCvvKey() {
+    /**
+     * Per-use keys (timeout 0) cannot include AUTH_DEVICE_CREDENTIAL.
+     * That combination throws IllegalArgumentException from Keystore on API 30+.
+     * Returns false when the key cannot be created so the UI can show a Persian error.
+     */
+    private fun ensureCvvKey(): Boolean {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        if (ks.containsAlias(CVV_KEY_ALIAS)) return
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        val builder = KeyGenParameterSpec.Builder(
-            CVV_KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
-            .setUserAuthenticationRequired(true)
-            .setRandomizedEncryptionRequired(true)
-        if (Build.VERSION.SDK_INT >= 30) {
-            builder.setUserAuthenticationParameters(
-                0,
-                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL,
+        if (ks.containsAlias(CVV_KEY_ALIAS)) return true
+        return try {
+            val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+            val builder = KeyGenParameterSpec.Builder(
+                CVV_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
             )
-        } else {
-            @Suppress("DEPRECATION")
-            builder.setUserAuthenticationValidityDurationSeconds(-1)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .setUserAuthenticationRequired(true)
+                .setRandomizedEncryptionRequired(true)
+            if (Build.VERSION.SDK_INT >= 30) {
+                builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+            } else {
+                @Suppress("DEPRECATION")
+                builder.setUserAuthenticationValidityDurationSeconds(-1)
+            }
+            generator.init(builder.build())
+            generator.generateKey()
+            true
+        } catch (t: GeneralSecurityException) {
+            false
+        } catch (t: IllegalArgumentException) {
+            false
         }
-        generator.init(builder.build())
-        generator.generateKey()
     }
 
-    private fun cvvKey(): SecretKey {
+    private fun cvvKey(): SecretKey? {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        return ks.getKey(CVV_KEY_ALIAS, null) as SecretKey
+        return ks.getKey(CVV_KEY_ALIAS, null) as? SecretKey
     }
 
     companion object {

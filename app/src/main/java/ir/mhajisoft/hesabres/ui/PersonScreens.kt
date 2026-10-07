@@ -85,7 +85,7 @@ fun PeopleScreen(state: AppUiState, onOpen: (String) -> Unit, onAdd: () -> Unit)
                 }
             } else {
                 LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    Modifier.weight(1f).padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(state.people, key = { it.id }) { p ->

@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import ir.mhajisoft.hesabres.ui.theme.argbColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -237,7 +238,7 @@ fun PersonAvatar(initials: String, color: Long, modifier: Modifier = Modifier, s
         modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(Color(color or 0xFF000000L)),
+            .background(argbColor(color)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -293,7 +294,7 @@ fun ColorPackPicker(selected: Long, onSelect: (Long) -> Unit) {
                 Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(c))
+                    .background(argbColor(c))
                     .border(
                         BorderStroke(if (on) 3.dp else 1.dp, if (on) Color.White else MaterialTheme.colorScheme.outline),
                         CircleShape,

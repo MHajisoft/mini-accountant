@@ -11,12 +11,17 @@ import dagger.hilt.components.SingletonComponent
 import ir.mhajisoft.hesabres.data.local.db.MiniAccountantDatabase
 import ir.mhajisoft.hesabres.data.local.db.MIGRATION_1_2
 import ir.mhajisoft.hesabres.data.local.db.MIGRATION_2_3
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.concurrent.Executors
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
+    private val dbDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "hesabres-db").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MiniAccountantDatabase {
@@ -29,7 +34,9 @@ object DatabaseModule {
         )
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
+            // BundledSQLiteDriver uses one connection. Dispatchers.IO resumes a
+            // @Transaction on a different thread and throws IllegalStateException.
+            .setQueryCoroutineContext(dbDispatcher)
             .build()
     }
 }
