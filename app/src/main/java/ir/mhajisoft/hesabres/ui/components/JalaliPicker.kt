@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -52,7 +52,7 @@ fun JalaliDatePickerDialog(
         title = { Text(stringResource(R.string.pick_date)) },
         text = {
             Column(
-                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                Modifier.height(360.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -94,6 +94,44 @@ fun ExpiryMonthYearPicker(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             years.forEach { y ->
                 ChoiceChip(year == y, { onChange(month, y) }, PersianDigits.toPersian(y.toString()))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun JalaliYmdEditor(
+    initial: JalaliYmd,
+    onChange: (JalaliYmd) -> Unit,
+) {
+    var year by remember { mutableIntStateOf(initial.year) }
+    var month by remember { mutableIntStateOf(initial.month.coerceIn(1, 12)) }
+    var day by remember { mutableIntStateOf(initial.day) }
+    val maxDay = BirashkAlgorithm.monthLength(year, month)
+    val safeDay = day.coerceIn(1, maxDay)
+    fun emit(y: Int, m: Int, d: Int) {
+        val mm = m.coerceIn(1, 12)
+        val capped = d.coerceIn(1, BirashkAlgorithm.monthLength(y, mm))
+        year = y
+        month = mm
+        day = capped
+        onChange(JalaliYmd(y, mm, capped))
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { emit(year - 1, month, safeDay) }) { Text("−") }
+            Text(PersianDigits.toPersian(year.toString()))
+            TextButton(onClick = { emit(year + 1, month, safeDay) }) { Text("+") }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..12).forEach { m ->
+                ChoiceChip(month == m, { emit(year, m, safeDay) }, JalaliLabels.monthName(m))
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..maxDay).forEach { d ->
+                ChoiceChip(safeDay == d, { emit(year, month, d) }, PersianDigits.toPersian(d.toString()))
             }
         }
     }

@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import ir.mhajisoft.hesabres.R
 
 @Composable
-fun LockScreen(onUnlock: () -> Unit) {
+fun LockScreen(onUnlock: () -> Unit, message: String? = null) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -24,6 +24,9 @@ fun LockScreen(onUnlock: () -> Unit) {
         ir.mhajisoft.hesabres.ui.BrandLogoFull(compact = true, modifier = Modifier.padding(bottom = 16.dp))
         Text(stringResource(R.string.unlock_title), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.unlock_subtitle), modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+        if (!message.isNullOrBlank()) {
+            Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp))
+        }
         Button(onClick = onUnlock) { Text(stringResource(R.string.unlock)) }
     }
 }

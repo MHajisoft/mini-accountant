@@ -36,9 +36,12 @@ import ir.mhajisoft.hesabres.domain.model.Person
 import ir.mhajisoft.hesabres.domain.model.SocialLink
 import ir.mhajisoft.hesabres.domain.model.Transfer
 import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
+import ir.mhajisoft.hesabres.domain.crash.DomainLists
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -62,25 +65,37 @@ class LedgerRepository @Inject constructor(
     private val snapshots: SnapshotDao,
     private val writes: LedgerWriteDao,
 ) {
-    val accountsFlow: Flow<List<Account>> = accounts.observeAll().map { list -> list.map { it.toDomain() } }
+    private val writeGate = Mutex()
+
+    private suspend fun <T> gated(block: suspend () -> T): T = writeGate.withLock { block() }
+
+    val accountsFlow: Flow<List<Account>> = accounts.observeAll().map { list ->
+        DomainLists.safeMap(list) { it.toDomain() }
+    }
     val activeAccountsFlow: Flow<List<Account>> = accounts.observeActive().map { list -> list.map { it.toDomain() } }
-    val categoriesFlow: Flow<List<Category>> = categories.observeAll().map { list -> list.map { it.toDomain() } }
-    val currentFyFlow: Flow<FiscalYear?> = fiscalYears.observeCurrent().map { it?.toDomain() }
-    val fiscalYearsFlow: Flow<List<FiscalYear>> = fiscalYears.observeAll().map { list -> list.map { it.toDomain() } }
+    val categoriesFlow: Flow<List<Category>> = categories.observeAll().map { list ->
+        DomainLists.safeMap(list) { it.toDomain() }
+    }
+    val currentFyFlow: Flow<FiscalYear?> = fiscalYears.observeCurrent().map { row ->
+        row?.let { DomainLists.safeMap(listOf(it)) { entity -> entity.toDomain() }.firstOrNull() }
+    }
+    val fiscalYearsFlow: Flow<List<FiscalYear>> = fiscalYears.observeAll().map { list ->
+        DomainLists.safeMap(list) { it.toDomain() }
+    }
     val recentTxnsFlow: Flow<List<LedgerTransaction>> = combine(
         txns.observeRecent(20),
         fiscalYears.observeCurrent(),
     ) { list, fy ->
-        list.filter { fy == null || it.fiscalYearId == fy.id }.take(5).map { it.toDomain() }
+        DomainLists.safeMap(list.filter { fy == null || it.fiscalYearId == fy.id }.take(5)) { it.toDomain() }
     }
     val allTxnsFlow: Flow<List<LedgerTransaction>> =
-        txns.observeAll().map { list -> list.map { it.toDomain() } }
+        txns.observeAll().map { list -> DomainLists.safeMap(list) { it.toDomain() } }
     val peopleFlow: Flow<List<Person>> = combine(
         people.observeAll(),
         socialLinks.observeAll(),
     ) { persons, links ->
         val byPerson = links.groupBy { it.personId }
-        persons.map { entity ->
+        DomainLists.safeMap(persons) { entity ->
             entity.toDomain(byPerson[entity.id].orEmpty().map { it.toDomain() })
         }
     }
@@ -104,9 +119,9 @@ class LedgerRepository @Inject constructor(
         val snapMap = snaps.groupBy { it.accountId }
             .mapValues { e -> e.value.maxBy { it.capturedAt }.amountSigned }
         val liveByAccount = txnRows.filter { fyId == null || it.fiscalYearId == fyId }.groupBy { it.accountId }
-        accs.map { entity ->
+        DomainLists.safeMap(accs) { entity ->
             val account = entity.toDomain()
-            val live = liveByAccount[account.id].orEmpty().map { it.toDomain() }
+            val live = DomainLists.safeMap(liveByAccount[account.id].orEmpty()) { it.toDomain() }
                 .filter { it.categoryId != SystemCategories.OPENING_BALANCE_ID }
             val opening = openingMap[account.id]
             val prior = if (opening != null) 0L else (snapMap[account.id] ?: 0L)
@@ -128,8 +143,8 @@ class LedgerRepository @Inject constructor(
         val accs = accounts.getAll().filter { !it.archived }
         val openingMap = openings.forYear(fyId).associate { it.accountId to it.amountSigned }
         val liveByAccount = txns.forYear(fyId).groupBy { it.accountId }
-        return accs.map { entity ->
-            val live = liveByAccount[entity.id].orEmpty().map { it.toDomain() }
+        return DomainLists.safeMap(accs) { entity ->
+            val live = DomainLists.safeMap(liveByAccount[entity.id].orEmpty()) { it.toDomain() }
                 .filter { it.categoryId != SystemCategories.OPENING_BALANCE_ID }
             AccountBalance(
                 entity.toDomain(),
@@ -138,7 +153,7 @@ class LedgerRepository @Inject constructor(
         }
     }
 
-    suspend fun closeCurrentAndStartNext(now: Long, startMonth: Int? = null, startDay: Int? = null): FiscalYear {
+    suspend fun closeCurrentAndStartNext(now: Long, startMonth: Int? = null, startDay: Int? = null): FiscalYear = gated {
         val current = fiscalYears.getCurrent() ?: error("سال مالی جاری پیدا نشد")
         val month = startMonth ?: current.startJalaliMonth
         val day = startDay ?: current.startJalaliDay
@@ -173,10 +188,10 @@ class LedgerRepository @Inject constructor(
                 fiscalYearId = nextFy.id,
             )?.let { txns.upsert(it.toEntity()) }
         }
-        return nextFy
+        nextFy
     }
 
-    suspend fun ensureSeeded(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) {
+    suspend fun ensureSeeded(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) = gated {
         ensureSystemCategories()
         if (fiscalYears.getCurrent() == null && fiscalYears.getAll().isEmpty()) {
             val window = NewYearDefaults.firstWindow(nowEpoch, fyStartMonth, fyStartDay)
@@ -195,14 +210,14 @@ class LedgerRepository @Inject constructor(
      * Apply the user's FY start (default 1 Farvardin) when creating books.
      * Onboarding used to no-op because init already inserted 1 Farvardin.
      */
-    suspend fun applyFiscalStart(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) {
+    suspend fun applyFiscalStart(nowEpoch: Long, fyStartMonth: Int, fyStartDay: Int) = gated {
         ensureSystemCategories()
         val window = NewYearDefaults.firstWindow(nowEpoch, fyStartMonth, fyStartDay)
         val current = fiscalYears.getCurrent()
         if (current == null) {
             val fy = FiscalYearCalculator.toModel(UUID.randomUUID().toString(), window, isCurrent = true)
             fiscalYears.upsert(fy.toEntity())
-            return
+            return@gated
         }
         if (txns.count() == 0) {
             fiscalYears.upsert(
@@ -221,7 +236,9 @@ class LedgerRepository @Inject constructor(
         }
     }
 
-    suspend fun currentFiscalYear(): FiscalYear? = fiscalYears.getCurrent()?.toDomain()
+    suspend fun currentFiscalYear(): FiscalYear? = fiscalYears.getCurrent()?.let { row ->
+        DomainLists.safeMap(listOf(row)) { it.toDomain() }.firstOrNull()
+    }
 
     suspend fun upsertAccount(account: Account) = accounts.upsert(account.toEntity())
 
@@ -233,8 +250,8 @@ class LedgerRepository @Inject constructor(
         return cat
     }
 
-    suspend fun deleteCustomCategory(id: String) {
-        val entity = categories.get(id) ?: return
+    suspend fun deleteCustomCategory(id: String) = gated {
+        val entity = categories.get(id) ?: return@gated
         val cat = entity.toDomain()
         require(CategoryRules.canDelete(cat)) { "دسته‌های سیستمی حذف نمی‌شوند" }
         val used = txns.getAll().any { it.categoryId == id }
@@ -273,7 +290,7 @@ class LedgerRepository @Inject constructor(
         feeRials: Long?,
         occurredAt: Long,
         note: String,
-    ): Transfer {
+    ): Transfer = gated {
         val fy = currentFiscalYear() ?: error(ComposerRules.ERR_NO_FY)
         val posting = TransferPoster.post(
             fromAccountId = fromAccountId,
@@ -288,7 +305,7 @@ class LedgerRepository @Inject constructor(
             posting.transfer.toEntity(),
             posting.allTransactions().map { it.toEntity() },
         )
-        return posting.transfer
+        posting.transfer
     }
 
     suspend fun deleteTransfer(transferId: String) {
@@ -305,7 +322,7 @@ class LedgerRepository @Inject constructor(
         note: String?,
         avatarColor: Long,
         socials: List<SocialLink> = emptyList(),
-    ): Person {
+    ): Person = gated {
         val now = System.currentTimeMillis()
         val accountId = UUID.randomUUID().toString()
         val personId = UUID.randomUUID().toString()
@@ -337,13 +354,13 @@ class LedgerRepository @Inject constructor(
             socialLinks = SocialLinkCatalog.sanitized(socials, personId),
         )
         writes.createPersonAtomic(account.toEntity(), person.toEntity(), person.socialLinks.map { it.toEntity() })
-        return person
+        person
     }
 
     suspend fun upsertPerson(person: Person) = people.upsert(person.toEntity())
 
-    suspend fun setOpeningBalance(accountId: String, amountSigned: Long, replaceTxn: Boolean) {
-        val fy = currentFiscalYear() ?: error("no fiscal year")
+    suspend fun setOpeningBalance(accountId: String, amountSigned: Long, replaceTxn: Boolean) = gated {
+        val fy = currentFiscalYear() ?: error(ComposerRules.ERR_NO_FY)
         openings.upsert(AccountOpeningBalance(fy.id, accountId, amountSigned).toEntity())
         if (replaceTxn) {
             val existing = txns.forAccount(accountId).filter {
@@ -359,13 +376,13 @@ class LedgerRepository @Inject constructor(
         }
     }
 
-    suspend fun rebuildFiscalYear(startMonth: Int, startDay: Int, nowEpoch: Long, hasTxns: Boolean) {
+    suspend fun rebuildFiscalYear(startMonth: Int, startDay: Int, nowEpoch: Long, hasTxns: Boolean) = gated {
         val window = FiscalYearCalculator.windowContaining(nowEpoch, startMonth, startDay)
         val current = fiscalYears.getCurrent()
         if (current == null) {
             val fy = FiscalYearCalculator.toModel(UUID.randomUUID().toString(), window, true)
             fiscalYears.upsert(fy.toEntity())
-            return
+            return@gated
         }
         val existingTxns = txns.count()
         if (existingTxns == 0 || !hasTxns) {
@@ -381,19 +398,19 @@ class LedgerRepository @Inject constructor(
                 endEpoch = window.endEpoch,
             )
             fiscalYears.upsert(updated)
-            return
+            return@gated
         }
-        val years = fiscalYears.getAll().map { it.toDomain() }.toMutableList()
+        val years = DomainLists.safeMap(fiscalYears.getAll()) { it.toDomain() }.toMutableList()
         val rebuilt = FiscalYearCalculator.toModel(current.id, window, isCurrent = true, closedAt = current.closedAt)
         val idx = years.indexOfFirst { it.id == current.id }
         if (idx >= 0) years[idx] = rebuilt else years += rebuilt
         fiscalYears.upsert(rebuilt.toEntity())
-        val allTx = txns.getAll().map { it.toDomain() }
+        val allTx = DomainLists.safeMap(txns.getAll()) { it.toDomain() }
         val result = FiscalRebucketer.rebucket(allTx, years)
         txns.upsertAll(result.updated.map { it.toEntity() })
     }
 
-    suspend fun updatePersonProfile(person: Person) {
+    suspend fun updatePersonProfile(person: Person) = gated {
         val links = SocialLinkCatalog.sanitized(person.socialLinks, person.id)
         val named = person.copy(
             name = person.displayName,
@@ -404,7 +421,7 @@ class LedgerRepository @Inject constructor(
         )
         people.upsert(named.toEntity())
         writes.replacePersonSocials(named.id, links.map { it.toEntity() })
-        val acc = accounts.get(named.accountId) ?: return
+        val acc = accounts.get(named.accountId) ?: return@gated
         accounts.update(acc.copy(name = named.displayName, color = named.avatarColor, updatedAt = System.currentTimeMillis()))
     }
 
@@ -416,7 +433,7 @@ class LedgerRepository @Inject constructor(
         note: String,
         occurredAt: Long,
         personId: String? = null,
-    ): LedgerTransaction {
+    ): LedgerTransaction = gated {
         require(accountId.isNotBlank()) { ComposerRules.ERR_PICK_ACCOUNT }
         val account = accounts.get(accountId) ?: error(ComposerRules.ERR_ACCOUNT_GONE)
         if (account.type == AccountType.PERSON.name) {
@@ -441,19 +458,20 @@ class LedgerRepository @Inject constructor(
             createdAt = System.currentTimeMillis(),
         )
         txns.upsert(txn.toEntity())
-        return txn
+        txn
     }
 
     suspend fun monthPnL(fyId: String, month: Int): List<LedgerTransaction> =
-        txns.forYear(fyId).map { it.toDomain() }.filter {
+        DomainLists.safeMap(txns.forYear(fyId)) { it.toDomain() }.filter {
             it.jalaliMonth == month && it.transferId == null &&
                 !SystemCategories.isExcludedFromCategoryCharts(it.categoryId)
         }
 
     suspend fun search(query: String): Flow<List<LedgerTransaction>> =
-        txns.search(query).map { list -> list.map { it.toDomain() } }
+        txns.search(query).map { list -> DomainLists.safeMap(list) { it.toDomain() } }
 
-    suspend fun accountById(id: String): Account? = accounts.get(id)?.toDomain()
+    suspend fun accountById(id: String): Account? =
+        accounts.get(id)?.let { row -> runCatching { row.toDomain() }.getOrNull() }
 
     suspend fun txnCount(): Int = txns.count()
 }

@@ -12,12 +12,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import ir.mhajisoft.hesabres.domain.crash.ArgbColors
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import ir.mhajisoft.hesabres.R
+
+/** ARGB longs are not Compose ColorLongs; the Long constructor can throw on the color-space bits. */
+fun argbColor(color: Long): Color = Color(ArgbColors.toArgbInt(color))
 
 val Vazirmatn = FontFamily(
     Font(R.font.vazirmatn_regular, FontWeight.Normal),

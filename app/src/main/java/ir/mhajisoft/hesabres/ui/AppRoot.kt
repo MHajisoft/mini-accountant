@@ -77,6 +77,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -99,6 +100,8 @@ import ir.mhajisoft.hesabres.data.repository.AccountBalance
 import ir.mhajisoft.hesabres.domain.bank.BankMatch
 import ir.mhajisoft.hesabres.domain.bank.CardMath
 import ir.mhajisoft.hesabres.domain.bank.IbanMath
+import ir.mhajisoft.hesabres.domain.crash.TabStack
+import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
 import ir.mhajisoft.hesabres.domain.jalali.JalaliLabels
 import ir.mhajisoft.hesabres.domain.jalali.JalaliYmd
@@ -125,6 +128,7 @@ import ir.mhajisoft.hesabres.ui.components.formatJalali
 import ir.mhajisoft.hesabres.ui.components.formatMoney
 import ir.mhajisoft.hesabres.ui.theme.HesabresTheme
 import ir.mhajisoft.hesabres.ui.theme.SymbolIcons
+import ir.mhajisoft.hesabres.ui.theme.argbColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -170,6 +174,9 @@ fun AppRoot(
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     fun notify(msg: String) { scope.launch { snack.showSnackbar(msg) } }
+    LaunchedEffect(Unit) {
+        vm.messages.collect { notify(it) }
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
@@ -309,8 +316,7 @@ fun AppRoot(
 }
 
 private fun rewind(stack: NavBackStack<NavKey>, tab: NavKey) {
-    stack.clear()
-    stack.add(tab)
+    TabStack.switchTo(stack, tab)
 }
 
 @Composable
@@ -322,6 +328,7 @@ fun OnboardingScreen(vm: AppViewModel) {
     var cashName by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf("") }
     var lock by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     Column(
         Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -379,9 +386,11 @@ fun OnboardingScreen(vm: AppViewModel) {
                         stringResource(R.string.start),
                         onClick = {
                             val open = Money.parseDisplayAmount(opening, false) ?: 0L
-                            vm.completeOnboarding(month, day, cashName, open, lock)
+                            error = null
+                            vm.completeOnboarding(month, day, cashName, open, lock) { error = it }
                         },
                     )
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -540,7 +549,7 @@ fun TxnListScreen(
                 )
             }
         } else {
-            LazyColumn {
+            LazyColumn(Modifier.weight(1f)) {
                 grouped.toSortedMap(compareByDescending<Triple<Int, Int, Int>> { it.first }.thenByDescending { it.second }.thenByDescending { it.third }).forEach { (day, rows) ->
                     item {
                         Text(
@@ -721,25 +730,43 @@ private fun ReportCharts(
     val pieProducer = remember { PieChartModelProducer() }
     val barProducer = remember { CartesianChartModelProducer() }
     val catKeys = remember(byCat) { byCat.keys.toList() }
+    var ready by remember { mutableStateOf(false) }
     LaunchedEffect(byCat, rows, yearMode) {
-        pieProducer.runTransaction {
-            pieSeries {
-                series(byCat.values.map { it })
-            }
-        }
         val grouped = if (yearMode) rows.groupBy { it.jalaliMonth } else rows.groupBy { it.jalaliDay }
-        val daily = grouped.toSortedMap()
-        barProducer.runTransaction {
-            columnSeries {
-                series(
-                    daily.keys.map { it },
-                    daily.values.map { v -> v.filter { it.direction == Direction.OUT }.sumOf { it.amount } },
-                )
+        val daily = grouped.toSortedMap().filter { it.value.isNotEmpty() }
+        if (byCat.isEmpty() || daily.isEmpty()) {
+            ready = false
+            return@LaunchedEffect
+        }
+        val plotted = runCatching {
+            pieProducer.runTransaction {
+                pieSeries {
+                    series(byCat.values.map { it.toDouble() })
+                }
+            }
+            barProducer.runTransaction {
+                columnSeries {
+                    series(
+                        daily.keys.map { it.toDouble() },
+                        daily.values.map { v ->
+                            v.filter { it.direction == Direction.OUT }.sumOf { it.amount }.toDouble()
+                        },
+                    )
+                }
             }
         }
+        ready = plotted.isSuccess
     }
+    val pieChart = rememberPieChart()
+    val columnLayer = rememberColumnCartesianLayer()
+    val barChart = rememberCartesianChart(
+        columnLayer,
+        startAxis = VerticalAxis.rememberStart(),
+        bottomAxis = HorizontalAxis.rememberBottom(),
+    )
+    if (!ready) return
     PieChartHost(
-        chart = rememberPieChart(),
+        chart = pieChart,
         modelProducer = pieProducer,
         modifier = Modifier.height(200.dp).fillMaxWidth().clickable {
             catKeys.firstOrNull()?.let(onSlice)
@@ -747,11 +774,7 @@ private fun ReportCharts(
     )
     Text(stringResource(R.string.daily_bars), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
     CartesianChartHost(
-        rememberCartesianChart(
-            rememberColumnCartesianLayer(),
-            startAxis = VerticalAxis.rememberStart(),
-            bottomAxis = HorizontalAxis.rememberBottom(),
-        ),
+        barChart,
         barProducer,
         modifier = Modifier.height(180.dp),
     )
@@ -938,7 +961,7 @@ fun CategoriesScreen(state: AppUiState, vm: AppViewModel, onError: (String) -> U
                         SymbolIcons.byKey(cat.iconKey),
                         null,
                         Modifier.size(28.dp),
-                        tint = Color(cat.color or 0xFF000000L),
+                        tint = argbColor(cat.color),
                     )
                     Column(Modifier.weight(1f)) {
                         Text(cat.name, style = MaterialTheme.typography.titleMedium)
@@ -986,8 +1009,12 @@ fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit
         if (cards.isEmpty() && ibans.isEmpty()) {
             FinanceEmptyState(SymbolIcons.Card, stringResource(R.string.empty_cards), stringResource(R.string.empty_cards_body))
         }
-        val activity = LocalContext.current as MainActivity
         val scope = rememberCoroutineScope()
+        val activity = LocalContext.current.findMainActivity()
+        if (activity == null) {
+            Text(WriteFailures.ERR_NO_ACTIVITY, color = MaterialTheme.colorScheme.error)
+            return@Column
+        }
         cards.forEach { c ->
             val logo = vm.vaultRepo.directory.logoOf(c.bin6, c.bankCode)
             val bank = vm.vaultRepo.directory.findById(c.bankCode) ?: vm.vaultRepo.directory.findByBin(c.bin6)
@@ -1005,8 +1032,8 @@ fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit
                     TextButton(onClick = {
                         val panId = c.panCipherId
                         activity.lockBeforePan {
-                            activity.lifecycleScopeLaunch {
-                                revealed = vm.vaultRepo.decryptPan(panId)
+                            activity.lifecycleScope.launch {
+                                revealed = runCatching { vm.vaultRepo.decryptPan(panId) }.getOrNull()
                             }
                         }
                     }) { Text(stringResource(R.string.reveal_pan)) }
@@ -1014,15 +1041,17 @@ fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit
                 if (c.rememberCvv && c.cvvCipherId != null) {
                     val cvvId = c.cvvCipherId
                     TextButton(onClick = {
-                        activity.lifecycleScopeLaunch {
-                            val iv = vm.vaultRepo.secretVault.cvvIv(cvvId) ?: return@lifecycleScopeLaunch
-                            val cipher = vm.vaultRepo.secretVault.createCvvDecryptCipher(iv)
+                        activity.lifecycleScope.launch {
+                            val iv = vm.vaultRepo.secretVault.cvvIv(cvvId) ?: return@launch
+                            val cipher = vm.vaultRepo.secretVault.createCvvDecryptCipher(iv) ?: return@launch
                             activity.promptUnlock(
                                 crypto = BiometricPrompt.CryptoObject(cipher),
                                 onSuccess = { result ->
-                                    activity.lifecycleScopeLaunch {
+                                    activity.lifecycleScope.launch {
                                         val unlocked = result.cryptoObject?.cipher ?: cipher
-                                        val cvv = vm.vaultRepo.secretVault.revealCvv(cvvId, unlocked) ?: return@lifecycleScopeLaunch
+                                        val cvv = runCatching {
+                                            vm.vaultRepo.secretVault.revealCvv(cvvId, unlocked)
+                                        }.getOrNull() ?: return@launch
                                         val cm = activity.getSystemService(ClipboardManager::class.java)
                                         cm.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.cvv), cvv))
                                         scope.launch {
@@ -1032,6 +1061,7 @@ fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit
                                     }
                                 },
                                 onCancel = {},
+                                onError = {},
                             )
                         }
                     }) { Text(stringResource(R.string.reveal_cvv)) }
@@ -1068,7 +1098,7 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
         onSecure(true)
         onDispose { onSecure(false) }
     }
-    val activity = LocalContext.current as MainActivity
+    val activity = LocalContext.current.findMainActivity()
     val today = remember { JalaliConverter.fromEpochMillis(System.currentTimeMillis()) }
     var pan by remember { mutableStateOf("") }
     var cvv by remember { mutableStateOf("") }
@@ -1124,51 +1154,65 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
         }
         Text(stringResource(R.string.cvv_warning), style = MaterialTheme.typography.bodySmall)
         PrimaryWideButton(stringResource(R.string.save), onClick = {
+            val host = activity ?: run {
+                error = WriteFailures.ERR_NO_ACTIVITY
+                return@PrimaryWideButton
+            }
             if (!CardMath.luhnValid(pan)) {
-                error = activity.getString(R.string.invalid_luhn)
+                error = host.getString(R.string.invalid_luhn)
                 return@PrimaryWideButton
             }
             val accountId = ledgerAccountId ?: return@PrimaryWideButton
-            val holderName = person?.displayName ?: activity.getString(R.string.owner_me)
+            val holderName = person?.displayName ?: host.getString(R.string.owner_me)
             if (rememberCvv && cvv.isNotBlank()) {
                 val cipher = vm.vaultRepo.secretVault.createCvvEncryptCipher()
-                activity.promptUnlock(
+                if (cipher == null) {
+                    error = host.getString(R.string.cvv_unavailable)
+                    return@PrimaryWideButton
+                }
+                host.promptUnlock(
                     crypto = BiometricPrompt.CryptoObject(cipher),
                     onSuccess = { result ->
-                        activity.lifecycleScopeLaunch {
+                        host.lifecycleScope.launch {
                             val unlocked = result.cryptoObject?.cipher ?: cipher
-                            vm.vaultRepo.saveCard(
-                                accountId = accountId,
-                                panAscii = pan,
-                                expiryMonth = expiryMonth,
-                                expiryYear = expiryYear,
-                                holderName = holderName,
-                                rememberCvv = true,
-                                cvvAscii = cvv,
-                                encryptCvv = { ascii -> vm.vaultRepo.secretVault.persistCvv(unlocked, ascii) },
-                                personId = holderPersonId,
-                            )
+                            runCatching {
+                                vm.vaultRepo.saveCard(
+                                    accountId = accountId,
+                                    panAscii = pan,
+                                    expiryMonth = expiryMonth,
+                                    expiryYear = expiryYear,
+                                    holderName = holderName,
+                                    rememberCvv = true,
+                                    cvvAscii = cvv,
+                                    encryptCvv = { ascii -> vm.vaultRepo.secretVault.persistCvv(unlocked, ascii) },
+                                    personId = holderPersonId,
+                                )
+                            }.onFailure { error = WriteFailures.ERR_CVV }
                         }
                     },
                     onCancel = {},
+                    onError = { error = WriteFailures.ERR_BIOMETRIC },
                 )
             } else {
-                activity.promptUnlock(
+                host.promptUnlock(
                     onSuccess = {
-                        activity.lifecycleScopeLaunch {
-                            vm.vaultRepo.saveCard(
-                                accountId = accountId,
-                                panAscii = pan,
-                                expiryMonth = expiryMonth,
-                                expiryYear = expiryYear,
-                                holderName = holderName,
-                                rememberCvv = false,
-                                cvvAscii = null,
-                                personId = holderPersonId,
-                            )
+                        host.lifecycleScope.launch {
+                            runCatching {
+                                vm.vaultRepo.saveCard(
+                                    accountId = accountId,
+                                    panAscii = pan,
+                                    expiryMonth = expiryMonth,
+                                    expiryYear = expiryYear,
+                                    holderName = holderName,
+                                    rememberCvv = false,
+                                    cvvAscii = null,
+                                    personId = holderPersonId,
+                                )
+                            }.onFailure { error = WriteFailures.ERR_GENERIC }
                         }
                     },
                     onCancel = {},
+                    onError = { error = WriteFailures.ERR_BIOMETRIC },
                 )
             }
         })
@@ -1187,12 +1231,18 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
             }
         }
         PrimaryWideButton(stringResource(R.string.save_iban), onClick = {
+            val host = activity ?: run {
+                error = WriteFailures.ERR_NO_ACTIVITY
+                return@PrimaryWideButton
+            }
             if (!IbanMath.isValidIranIban(iban)) {
-                error = activity.getString(R.string.invalid_iban)
+                error = host.getString(R.string.invalid_iban)
             } else {
                 val accountId = ledgerAccountId ?: return@PrimaryWideButton
-                activity.lifecycleScopeLaunch {
-                    vm.vaultRepo.saveBankAccount(accountId, accountNumber, iban, personId = holderPersonId)
+                host.lifecycleScope.launch {
+                    runCatching {
+                        vm.vaultRepo.saveBankAccount(accountId, accountNumber, iban, personId = holderPersonId)
+                    }.onFailure { error = WriteFailures.ERR_GENERIC }
                 }
             }
         })
@@ -1274,10 +1324,10 @@ fun ArchiveViewerScreen(vm: AppViewModel, fileName: String) {
     LaunchedEffect(fileName) {
         rows = runCatching { vm.archiveRepo.readArchivedTransactions(fileName) }.getOrDefault(emptyList())
     }
-    Column(Modifier.padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text(fileName, style = MaterialTheme.typography.titleLarge)
         Text(stringResource(R.string.read_only), style = MaterialTheme.typography.bodySmall)
-        LazyColumn {
+        LazyColumn(Modifier.weight(1f)) {
             items(rows, key = { it.id }) { txn ->
                 ListItem(
                     headlineContent = { Text(txn.note.ifBlank { stringResource(R.string.transfer) }) },
@@ -1297,21 +1347,37 @@ fun ArchiveViewerScreen(vm: AppViewModel, fileName: String) {
 fun BackupScreen(vm: AppViewModel) {
     var pass by remember { mutableStateOf("") }
     val ctx = LocalContext.current
+    var backupError by remember { mutableStateOf<String?>(null) }
+    fun activityOrNull(): MainActivity? = ctx.findMainActivity()
     val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val activity = activityOrNull() ?: run {
+            backupError = WriteFailures.ERR_NO_ACTIVITY
+            return@rememberLauncherForActivityResult
+        }
         if (uri != null) {
-            (ctx as MainActivity).lifecycleScopeLaunch {
-                val bytes = vm.backupRepo.createEncryptedBackup(pass)
-                vm.backupRepo.writeToSaf(uri, bytes)
-                vm.backupRepo.recordLocal(uri.toString(), bytes)
+            activity.lifecycleScope.launch {
+                backupError = runCatching {
+                    val bytes = vm.backupRepo.createEncryptedBackup(pass)
+                    vm.backupRepo.writeToSaf(uri, bytes)
+                    vm.backupRepo.recordLocal(uri.toString(), bytes)
+                    null
+                }.exceptionOrNull()?.let { WriteFailures.ERR_BACKUP }
             }
         }
     }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val activity = activityOrNull() ?: run {
+            backupError = WriteFailures.ERR_NO_ACTIVITY
+            return@rememberLauncherForActivityResult
+        }
         if (uri != null) {
-            (ctx as MainActivity).lifecycleScopeLaunch {
-                val bytes = vm.backupRepo.readFromSaf(uri)
-                vm.backupRepo.restoreEncrypted(bytes, pass)
-                vm.backupRepo.restartProcess(ctx)
+            activity.lifecycleScope.launch {
+                backupError = runCatching {
+                    val bytes = vm.backupRepo.readFromSaf(uri)
+                    vm.backupRepo.restoreEncrypted(bytes, pass)
+                    vm.backupRepo.restartProcess(activity)
+                    null
+                }.exceptionOrNull()?.let { WriteFailures.ERR_RESTORE }
             }
         }
     }
@@ -1331,10 +1397,16 @@ fun BackupScreen(vm: AppViewModel) {
             Text(drive.reasonFa)
         } else {
             Button(onClick = {
-                (ctx as MainActivity).lifecycleScopeLaunch {
-                    val bytes = vm.backupRepo.createEncryptedBackup(pass)
-                    val result = vm.backupRepo.uploadCloud(ir.mhajisoft.hesabres.data.cloud.CloudKind.DRIVE, bytes)
-                    cloudMsg = result.exceptionOrNull()?.message ?: ctx.getString(R.string.ok)
+                val activity = activityOrNull() ?: run {
+                    backupError = WriteFailures.ERR_NO_ACTIVITY
+                    return@Button
+                }
+                activity.lifecycleScope.launch {
+                    runCatching {
+                        val bytes = vm.backupRepo.createEncryptedBackup(pass)
+                        val result = vm.backupRepo.uploadCloud(ir.mhajisoft.hesabres.data.cloud.CloudKind.DRIVE, bytes)
+                        cloudMsg = result.exceptionOrNull()?.message ?: ctx.getString(R.string.ok)
+                    }.onFailure { backupError = WriteFailures.ERR_BACKUP }
                 }
             }, enabled = pass.length >= 4) { Text(stringResource(R.string.upload_drive)) }
         }
@@ -1343,13 +1415,20 @@ fun BackupScreen(vm: AppViewModel) {
             Text(one.reasonFa)
         } else {
             Button(onClick = {
-                (ctx as MainActivity).lifecycleScopeLaunch {
-                    val bytes = vm.backupRepo.createEncryptedBackup(pass)
-                    val result = vm.backupRepo.uploadCloud(ir.mhajisoft.hesabres.data.cloud.CloudKind.ONEDRIVE, bytes)
-                    cloudMsg = result.exceptionOrNull()?.message ?: ctx.getString(R.string.ok)
+                val activity = activityOrNull() ?: run {
+                    backupError = WriteFailures.ERR_NO_ACTIVITY
+                    return@Button
+                }
+                activity.lifecycleScope.launch {
+                    runCatching {
+                        val bytes = vm.backupRepo.createEncryptedBackup(pass)
+                        val result = vm.backupRepo.uploadCloud(ir.mhajisoft.hesabres.data.cloud.CloudKind.ONEDRIVE, bytes)
+                        cloudMsg = result.exceptionOrNull()?.message ?: ctx.getString(R.string.ok)
+                    }.onFailure { backupError = WriteFailures.ERR_BACKUP }
                 }
             }, enabled = pass.length >= 4) { Text(stringResource(R.string.upload_onedrive)) }
         }
+        backupError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         cloudMsg?.let { Text(it) }
     }
 }
@@ -1389,8 +1468,13 @@ fun SettingsScreen(state: AppUiState, vm: AppViewModel) {
     }
 }
 
-private fun MainActivity.lifecycleScopeLaunch(block: suspend () -> Unit) {
-    kotlinx.coroutines.MainScope().launch { block() }
+private fun Context.findMainActivity(): MainActivity? {
+    var current: Context? = this
+    while (current is android.content.ContextWrapper) {
+        if (current is MainActivity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 @Preview(showBackground = true, locale = "fa", name = "Home")

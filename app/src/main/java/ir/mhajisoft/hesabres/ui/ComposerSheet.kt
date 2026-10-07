@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -31,13 +31,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import ir.mhajisoft.hesabres.R
+import ir.mhajisoft.hesabres.domain.crash.SheetBounds
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
 import ir.mhajisoft.hesabres.domain.ledger.ComposerRules
 import ir.mhajisoft.hesabres.domain.ledger.SystemCategories
 import ir.mhajisoft.hesabres.domain.model.CategoryKind
 import ir.mhajisoft.hesabres.ui.components.ChoiceChip
 import ir.mhajisoft.hesabres.ui.components.FinanceTextField
-import ir.mhajisoft.hesabres.ui.components.JalaliDatePickerDialog
+import ir.mhajisoft.hesabres.ui.components.JalaliYmdEditor
 import ir.mhajisoft.hesabres.ui.components.PrimaryWideButton
 import ir.mhajisoft.hesabres.ui.components.SectionLabel
 import ir.mhajisoft.hesabres.ui.components.formatJalali
@@ -84,7 +85,7 @@ fun ComposerSheet(
     var at by remember { mutableStateOf(System.currentTimeMillis()) }
     var pick by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
+    val maxSheetHeight = SheetBounds.maxHeightDp(LocalConfiguration.current.screenHeightDp).dp
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -95,10 +96,10 @@ fun ComposerSheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                .height(maxSheetHeight)
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .imePadding()
-                .heightIn(max = maxSheetHeight)
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -123,7 +124,12 @@ fun ComposerSheet(
                 label = stringResource(R.string.amount),
                 keyboardType = KeyboardType.Number,
             )
-            ChoiceChip(false, { pick = true }, formatJalali(at), SymbolIcons.Receipt)
+            ChoiceChip(pick, { pick = !pick }, formatJalali(at), SymbolIcons.Receipt)
+            if (pick) {
+                JalaliYmdEditor(JalaliConverter.fromEpochMillis(at)) { ymd ->
+                    at = JalaliConverter.toEpochMillisStartOfDay(ymd) + (at % 86_400_000L)
+                }
+            }
             if (mode < 2) {
                 SectionLabel(stringResource(R.string.account))
                 if (spendAccounts.isEmpty()) {
@@ -208,12 +214,6 @@ fun ComposerSheet(
                 })
             }
             Spacer(Modifier.height(12.dp))
-        }
-    }
-    if (pick) {
-        JalaliDatePickerDialog(JalaliConverter.fromEpochMillis(at), { pick = false }) {
-            at = JalaliConverter.toEpochMillisStartOfDay(it) + (at % 86_400_000L)
-            pick = false
         }
     }
 }

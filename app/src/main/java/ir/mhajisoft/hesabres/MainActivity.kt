@@ -11,15 +11,18 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.AndroidEntryPoint
+import ir.mhajisoft.hesabres.domain.crash.BiometricPromptPolicy
+import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.ui.AppRoot
 import ir.mhajisoft.hesabres.ui.BrandSplash
 import ir.mhajisoft.hesabres.ui.lock.LockScreen
@@ -31,6 +34,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
     @Inject lateinit var lockController: AppLockController
+    private val promptGate = AtomicBoolean(false)
 
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(newBase.forceFaLocale())
@@ -57,11 +61,26 @@ class MainActivity : FragmentActivity() {
                     val locked by lockController.locked.collectAsStateWithLifecycle()
                     if (locked) {
                         BackHandler { finish() }
+                        var lockError by remember { mutableStateOf<String?>(null) }
                         LockScreen(
-                            onUnlock = { promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() }) },
+                            message = lockError,
+                            onUnlock = {
+                                promptUnlock(
+                                    onSuccess = { lockController.unlock() },
+                                    onCancel = { finish() },
+                                    onError = { lockError = WriteFailures.ERR_BIOMETRIC },
+                                )
+                            },
                         )
                         LaunchedEffect(Unit) {
-                            promptUnlock(onSuccess = { lockController.unlock() }, onCancel = { finish() })
+                            // Prompting before RESUMED throws from FragmentManager.
+                            snapshotFlow { lifecycle.currentState }
+                                .first { it.isAtLeast(Lifecycle.State.RESUMED) }
+                            promptUnlock(
+                                onSuccess = { lockController.unlock() },
+                                onCancel = { finish() },
+                                onError = { lockError = WriteFailures.ERR_BIOMETRIC },
+                            )
                         }
                     } else {
                         AppRoot(onSecureWindow = { secure ->
@@ -86,13 +105,30 @@ class MainActivity : FragmentActivity() {
         onCancel: () -> Unit,
         onError: ((Int) -> Unit)? = null,
     ) {
+        if (!promptGate.compareAndSet(false, true)) return
+        val needsCrypto = crypto != null
+        val authenticators = if (BiometricPromptPolicy.allowsDeviceCredential(Build.VERSION.SDK_INT, needsCrypto)) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        }
+        val can = runCatching { BiometricManager.from(this).canAuthenticate(authenticators) }
+            .getOrDefault(BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE)
+        if (can != BiometricManager.BIOMETRIC_SUCCESS) {
+            promptGate.set(false)
+            onError?.invoke(can) ?: onCancel()
+            return
+        }
+        val release = { promptGate.set(false) }
         val executor = ContextCompat.getMainExecutor(this)
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                release()
                 onSuccess(result)
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                release()
                 if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
                     errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
                     errorCode == BiometricPrompt.ERROR_CANCELED
@@ -103,24 +139,29 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-        val prompt = BiometricPrompt(this, executor, callback)
-        val builder = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(getString(R.string.unlock_title))
-            .setSubtitle(getString(R.string.unlock_subtitle))
-        if (crypto != null && Build.VERSION.SDK_INT < 30) {
-            builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            builder.setNegativeButtonText(getString(R.string.cancel))
-        } else if (Build.VERSION.SDK_INT >= 30) {
-            builder.setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            builder.setDeviceCredentialAllowed(true)
+        try {
+            val prompt = BiometricPrompt(this, executor, callback)
+            val builder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(getString(R.string.unlock_title))
+                .setSubtitle(getString(R.string.unlock_subtitle))
+            if (BiometricPromptPolicy.allowsDeviceCredential(Build.VERSION.SDK_INT, needsCrypto)) {
+                builder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+                )
+            } else {
+                builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                builder.setNegativeButtonText(getString(R.string.cancel))
+            }
+            val info = builder.build()
+            if (crypto != null) prompt.authenticate(info, crypto) else prompt.authenticate(info)
+        } catch (t: IllegalArgumentException) {
+            release()
+            onError?.invoke(BiometricPrompt.ERROR_HW_NOT_PRESENT) ?: onCancel()
+        } catch (t: IllegalStateException) {
+            release()
+            onError?.invoke(BiometricPrompt.ERROR_HW_NOT_PRESENT) ?: onCancel()
         }
-        val info = builder.build()
-        if (crypto != null) prompt.authenticate(info, crypto) else prompt.authenticate(info)
     }
 
     fun lockBeforePan(onUnlocked: () -> Unit) {
@@ -128,5 +169,3 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-@Composable
-fun activity(): MainActivity = LocalContext.current as MainActivity
