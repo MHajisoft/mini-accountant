@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,7 +76,9 @@ fun PeopleScreen(state: AppUiState, onOpen: (String) -> Unit, onAdd: () -> Unit)
             Text(
                 stringResource(R.string.people),
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (state.people.isEmpty()) {
                 Box(Modifier.padding(16.dp)) {
@@ -95,17 +100,27 @@ fun PeopleScreen(state: AppUiState, onOpen: (String) -> Unit, onAdd: () -> Unit)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 PersonAvatar(p.initials, p.avatarColor)
                                 Column(Modifier.weight(1f)) {
-                                    Text(p.displayName, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        p.displayName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                     Text(
                                         p.email ?: p.phone ?: stringResource(if (bal >= 0) R.string.debtor else R.string.creditor),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                                 Text(
                                     formatMoney(kotlin.math.abs(bal), state.settings.displayToman),
                                     color = if (bal >= 0) tones.debtor else tones.creditor,
                                     style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.widthIn(max = 120.dp),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -170,10 +185,20 @@ fun PersonEditForm(
     var customValue by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(if (existing == null) R.string.add_person else R.string.person_info)) },
+            title = {
+                Text(
+                    stringResource(if (existing == null) R.string.add_person else R.string.person_info),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) { Icon(SymbolIcons.Back, stringResource(R.string.close)) }
             },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+            ),
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -328,13 +353,23 @@ fun PersonDetailContent(
     val role = if (bal >= 0) stringResource(R.string.debtor) else stringResource(R.string.creditor)
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.person_profile)) },
+            title = {
+                Text(
+                    stringResource(R.string.person_profile),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) { Icon(SymbolIcons.Back, stringResource(R.string.close)) }
             },
             actions = {
                 IconButton(onClick = onEdit) { Icon(SymbolIcons.Category, stringResource(R.string.edit)) }
             },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+            ),
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -344,7 +379,12 @@ fun PersonDetailContent(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PersonAvatar(person.initials, person.avatarColor, size = 64)
                     Column {
-                        Text(person.displayName, style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            person.displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(role, color = if (bal >= 0) tones.debtor else tones.creditor, style = MaterialTheme.typography.titleSmall)
                     }
                 }

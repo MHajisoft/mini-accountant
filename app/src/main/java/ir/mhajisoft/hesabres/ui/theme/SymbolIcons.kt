@@ -29,6 +29,11 @@ object SymbolIcons {
     val People = roundedSymbol("people") { people() }
     val Category = roundedSymbol("category") { category() }
     val Card = roundedSymbol("card") { card() }
+    /** Points toward the leading edge so a row in RTL discloses to the left. */
+    val Chevron = roundedSymbol("chevron") { chevron() }
+    val Lock = roundedSymbol("lock") { lock() }
+    val Settings = roundedSymbol("settings") { settings() }
+    val Archive = roundedSymbol("archive") { archive() }
 
     fun byKey(key: String): ImageVector = cache.getOrPut(key) {
         when (key) {
@@ -280,6 +285,37 @@ object SymbolIcons {
         curveTo(13.1f, 14f, 14f, 13.1f, 14f, 12f); curveTo(14f, 10.9f, 13.1f, 10f, 12f, 10f); close()
         moveTo(18f, 10f); curveTo(16.9f, 10f, 16f, 10.9f, 16f, 12f); curveTo(16f, 13.1f, 16.9f, 14f, 18f, 14f)
         curveTo(19.1f, 14f, 20f, 13.1f, 20f, 12f); curveTo(20f, 10.9f, 19.1f, 10f, 18f, 10f); close()
+    }
+
+    private fun ImageVector.Builder.chevron() = p {
+        moveTo(14.5f, 6f); lineTo(8.5f, 12f); lineTo(14.5f, 18f)
+        lineTo(13f, 19.5f); lineTo(5.5f, 12f); lineTo(13f, 4.5f); close()
+    }
+
+    private fun ImageVector.Builder.lock() = p {
+        moveTo(7f, 10f); horizontalLineTo(17f); curveTo(18.1f, 10f, 19f, 10.9f, 19f, 12f); verticalLineTo(20f)
+        curveTo(19f, 21.1f, 18.1f, 22f, 17f, 22f); horizontalLineTo(7f)
+        curveTo(5.9f, 22f, 5f, 21.1f, 5f, 20f); verticalLineTo(12f)
+        curveTo(5f, 10.9f, 5.9f, 10f, 7f, 10f); close()
+        moveTo(9f, 10f); verticalLineTo(7.5f); curveTo(9f, 5.6f, 10.3f, 4f, 12f, 4f)
+        curveTo(13.7f, 4f, 15f, 5.6f, 15f, 7.5f); verticalLineTo(10f); horizontalLineTo(13.2f)
+        verticalLineTo(7.5f); curveTo(13.2f, 6.6f, 12.7f, 5.8f, 12f, 5.8f)
+        curveTo(11.3f, 5.8f, 10.8f, 6.6f, 10.8f, 7.5f); verticalLineTo(10f); close()
+    }
+
+    private fun ImageVector.Builder.settings() = p {
+        moveTo(3f, 6f); horizontalLineTo(13f); verticalLineTo(8.2f); horizontalLineTo(3f); close()
+        moveTo(15.2f, 5f); horizontalLineTo(18f); verticalLineTo(9.2f); horizontalLineTo(15.2f); close()
+        moveTo(3f, 11f); horizontalLineTo(7f); verticalLineTo(13.2f); horizontalLineTo(3f); close()
+        moveTo(9.2f, 10f); horizontalLineTo(21f); verticalLineTo(14.2f); horizontalLineTo(9.2f); close()
+        moveTo(3f, 16f); horizontalLineTo(15f); verticalLineTo(18.2f); horizontalLineTo(3f); close()
+        moveTo(17.2f, 15f); horizontalLineTo(21f); verticalLineTo(19.2f); horizontalLineTo(17.2f); close()
+    }
+
+    private fun ImageVector.Builder.archive() = p {
+        moveTo(4f, 4f); horizontalLineTo(20f); verticalLineTo(8f); horizontalLineTo(4f); close()
+        moveTo(5f, 9f); horizontalLineTo(19f); verticalLineTo(20f); horizontalLineTo(5f); close()
+        moveTo(9f, 12f); horizontalLineTo(15f); verticalLineTo(14f); horizontalLineTo(9f); close()
     }
 
     private fun swap(): ImageVector {
