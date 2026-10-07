@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ir.mhajisoft.hesabres.R
 
 /** ARGB longs are not Compose ColorLongs; the Long constructor can throw on the color-space bits. */
@@ -56,11 +57,11 @@ val BrandOffWhite = Color(0xFFF1F5F9)
 
 val LocalLedgerTones = staticCompositionLocalOf {
     LedgerTones(
-        income = BrandTeal,
+        income = Color(0xFF047857),
         onIncome = Color.White,
         expense = Color(0xFFB91C1C),
         onExpense = Color.White,
-        debtor = Color(0xFFC2410C),
+        debtor = Color(0xFF9A3412),
         creditor = BrandDeepBlue,
     )
 }
@@ -80,17 +81,17 @@ private val LightColors = lightColorScheme(
     onTertiaryContainer = Color(0xFF3F6212),
     background = BrandSoftBackground,
     onBackground = Color(0xFF0F172A),
-    surface = BrandOffWhite,
+    surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFD5E8F6),
+    surfaceVariant = Color(0xFFD6E6F2),
     onSurfaceVariant = Color(0xFF334155),
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = Color(0xFFF8FAFC),
     surfaceContainer = Color(0xFFE8F4FC),
     surfaceContainerHigh = Color(0xFFD7EAF8),
     surfaceContainerHighest = Color(0xFFC7E0F4),
-    outline = Color(0xFF64748B),
-    outlineVariant = Color(0xFFB8D4EA),
+    outline = Color(0xFF475569),
+    outlineVariant = Color(0xFF64748B),
     error = Color(0xFFB42318),
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFEE4E2),
@@ -124,8 +125,8 @@ private val DarkColors = darkColorScheme(
     surfaceContainer = Color(0xFF172033),
     surfaceContainerHigh = Color(0xFF1E293B),
     surfaceContainerHighest = Color(0xFF273549),
-    outline = Color(0xFF94A3B8),
-    outlineVariant = Color(0xFF334155),
+    outline = Color(0xFFCBD5E1),
+    outlineVariant = Color(0xFF64748B),
     error = Color(0xFFF97066),
     onError = Color(0xFF7A271A),
     errorContainer = Color(0xFF7A271A),
@@ -136,11 +137,11 @@ private val DarkColors = darkColorScheme(
 )
 
 private val LightTones = LedgerTones(
-    income = BrandTeal,
+    income = Color(0xFF047857),
     onIncome = Color.White,
     expense = Color(0xFFB91C1C),
     onExpense = Color.White,
-    debtor = Color(0xFFC2410C),
+    debtor = Color(0xFF9A3412),
     creditor = BrandDeepBlue,
 )
 
@@ -163,21 +164,21 @@ fun HesabresTheme(
 ) {
     val typography = MaterialTheme.typography.run {
         copy(
-            displayLarge = displayLarge.copy(fontFamily = Vazirmatn),
-            displayMedium = displayMedium.copy(fontFamily = Vazirmatn),
-            displaySmall = displaySmall.copy(fontFamily = Vazirmatn),
-            headlineLarge = headlineLarge.copy(fontFamily = Vazirmatn),
-            headlineMedium = headlineMedium.copy(fontFamily = Vazirmatn),
-            headlineSmall = headlineSmall.copy(fontFamily = Vazirmatn),
-            titleLarge = titleLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.SemiBold),
-            titleMedium = titleMedium.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.SemiBold),
-            titleSmall = titleSmall.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Medium),
-            bodyLarge = bodyLarge.copy(fontFamily = Vazirmatn),
-            bodyMedium = bodyMedium.copy(fontFamily = Vazirmatn),
-            bodySmall = bodySmall.copy(fontFamily = Vazirmatn),
-            labelLarge = labelLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Medium),
-            labelMedium = labelMedium.copy(fontFamily = Vazirmatn),
-            labelSmall = labelSmall.copy(fontFamily = Vazirmatn),
+            displayLarge = displayLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 64.sp),
+            displayMedium = displayMedium.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 52.sp),
+            displaySmall = displaySmall.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 44.sp),
+            headlineLarge = headlineLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 40.sp),
+            headlineMedium = headlineMedium.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 36.sp),
+            headlineSmall = headlineSmall.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Bold, lineHeight = 32.sp),
+            titleLarge = titleLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.SemiBold, lineHeight = 28.sp),
+            titleMedium = titleMedium.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.SemiBold, lineHeight = 24.sp),
+            titleSmall = titleSmall.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Medium, lineHeight = 22.sp),
+            bodyLarge = bodyLarge.copy(fontFamily = Vazirmatn, lineHeight = 26.sp),
+            bodyMedium = bodyMedium.copy(fontFamily = Vazirmatn, lineHeight = 22.sp),
+            bodySmall = bodySmall.copy(fontFamily = Vazirmatn, lineHeight = 18.sp),
+            labelLarge = labelLarge.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
+            labelMedium = labelMedium.copy(fontFamily = Vazirmatn, fontWeight = FontWeight.Medium, lineHeight = 18.sp),
+            labelSmall = labelSmall.copy(fontFamily = Vazirmatn, lineHeight = 16.sp),
         )
     }
     CompositionLocalProvider(

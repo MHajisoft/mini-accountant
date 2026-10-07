@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -89,9 +89,13 @@ fun ComposerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 2.dp,
+        shape = MaterialTheme.shapes.extraLarge,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline)
+        },
     ) {
         Column(
             Modifier
@@ -111,9 +115,12 @@ fun ComposerSheet(
                         else -> R.string.add_expense
                     },
                 ),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 ChoiceChip(mode == 0, { mode = 0 }, stringResource(R.string.expense))
                 ChoiceChip(mode == 1, { mode = 1 }, stringResource(R.string.income))
                 ChoiceChip(mode == 2, { mode = 2 }, stringResource(R.string.transfer))
@@ -123,6 +130,7 @@ fun ComposerSheet(
                 onValueChange = { amount = it },
                 label = stringResource(R.string.amount),
                 keyboardType = KeyboardType.Number,
+                textStyle = MaterialTheme.typography.headlineSmall,
             )
             ChoiceChip(pick, { pick = !pick }, formatJalali(at), SymbolIcons.Receipt)
             if (pick) {
@@ -139,14 +147,20 @@ fun ComposerSheet(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         spendAccounts.forEach { acc ->
                             ChoiceChip(accountId == acc.id, { accountId = acc.id }, acc.name)
                         }
                     }
                 }
                 SectionLabel(stringResource(R.string.category))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     cats.forEach { c ->
                         ChoiceChip(catId == c.id, { catId = c.id }, c.name, SymbolIcons.byKey(c.iconKey))
                     }
@@ -180,13 +194,19 @@ fun ComposerSheet(
                 })
             } else {
                 SectionLabel(stringResource(R.string.from_account))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     ledgerAccounts.forEach { acc ->
                         ChoiceChip(accountId == acc.id, { accountId = acc.id }, acc.name)
                     }
                 }
                 SectionLabel(stringResource(R.string.to_account))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     ledgerAccounts.forEach { acc ->
                         ChoiceChip(toId == acc.id, { toId = acc.id }, acc.name)
                     }
@@ -218,18 +238,47 @@ fun ComposerSheet(
     }
 }
 
-@Preview(showBackground = true, locale = "fa", name = "Add sheet")
+@OptIn(ExperimentalLayoutApi::class)
+@Preview(showBackground = true, locale = "fa", name = "Add sheet", widthDp = 390, heightDp = 760)
+@Preview(showBackground = true, locale = "fa", name = "Add sheet dark", widthDp = 390, heightDp = 760, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun PreviewComposerSheetBody() {
-    HesabresTheme {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("ثبت هزینه", style = MaterialTheme.typography.titleLarge)
-            ChoiceChip(true, {}, "هزینه")
-            ChoiceChip(false, {}, "درآمد")
-            FinanceTextField("۱۲۰۰۰۰", {}, label = "مبلغ", keyboardType = KeyboardType.Number)
-            ChoiceChip(true, {}, "نقد")
-            ChoiceChip(false, {}, "خوراک", SymbolIcons.byKey("restaurant"))
-            PrimaryWideButton("ذخیره", onClick = {})
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    HesabresTheme(darkTheme = dark) {
+        androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+            Column(
+                Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(stringResource(R.string.add_expense), style = MaterialTheme.typography.headlineSmall)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ChoiceChip(true, {}, stringResource(R.string.expense))
+                    ChoiceChip(false, {}, stringResource(R.string.income))
+                    ChoiceChip(false, {}, stringResource(R.string.transfer))
+                }
+                FinanceTextField(
+                    "۱۲۰٬۰۰۰",
+                    {},
+                    label = stringResource(R.string.amount),
+                    keyboardType = KeyboardType.Number,
+                    textStyle = MaterialTheme.typography.headlineSmall,
+                )
+                SectionLabel(stringResource(R.string.account))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceChip(true, {}, "نقد")
+                    ChoiceChip(false, {}, "بانک ملت")
+                }
+                SectionLabel(stringResource(R.string.category))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceChip(true, {}, "خوراک", SymbolIcons.byKey("restaurant"))
+                    ChoiceChip(false, {}, "حمل‌ونقل", SymbolIcons.byKey("directions_car"))
+                }
+                FinanceTextField("", {}, label = stringResource(R.string.note))
+                PrimaryWideButton(stringResource(R.string.save), onClick = {})
+            }
         }
     }
 }
