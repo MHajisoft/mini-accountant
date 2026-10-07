@@ -259,6 +259,9 @@ interface BankAccountDao {
     @Query("SELECT * FROM bank_accounts")
     suspend fun getAll(): List<BankAccountEntity>
 
+    @Query("SELECT * FROM bank_accounts WHERE id = :id")
+    suspend fun get(id: String): BankAccountEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: BankAccountEntity)
 

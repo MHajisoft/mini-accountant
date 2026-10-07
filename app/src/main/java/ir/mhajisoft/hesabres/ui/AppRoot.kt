@@ -101,6 +101,8 @@ import ir.mhajisoft.hesabres.data.repository.AccountBalance
 import ir.mhajisoft.hesabres.domain.bank.BankMatch
 import ir.mhajisoft.hesabres.domain.bank.CardMath
 import ir.mhajisoft.hesabres.domain.bank.IbanMath
+import ir.mhajisoft.hesabres.domain.bank.VaultFieldError
+import ir.mhajisoft.hesabres.domain.bank.VaultInput
 import ir.mhajisoft.hesabres.domain.crash.TabStack
 import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
@@ -153,6 +155,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object RoutePeople : NavKey
 @Serializable data class RoutePerson(val personId: String) : NavKey
 @Serializable data class RoutePersonEdit(val personId: String? = null) : NavKey
+@Serializable data class RoutePersonCard(val personId: String, val cardId: String? = null) : NavKey
+@Serializable data class RoutePersonIban(val personId: String, val bankAccountId: String? = null) : NavKey
 @Serializable data object RouteCategories : NavKey
 @Serializable data object RouteVault : NavKey
 @Serializable data object RouteCardForm : NavKey
@@ -298,10 +302,35 @@ fun AppRoot(
                         key.personId,
                         onBack = { backStack.removeLastOrNull() },
                         onEdit = { backStack.add(RoutePersonEdit(key.personId)) },
+                        onAddCard = { backStack.add(RoutePersonCard(key.personId)) },
+                        onEditCard = { backStack.add(RoutePersonCard(key.personId, it)) },
+                        onAddIban = { backStack.add(RoutePersonIban(key.personId)) },
+                        onEditIban = { backStack.add(RoutePersonIban(key.personId, it)) },
+                        onSecure = onSecureWindow,
                     )
                 }
                 entry<RoutePersonEdit> { key ->
                     PersonEditScreen(state, vm, key.personId, onBack = { backStack.removeLastOrNull() })
+                }
+                entry<RoutePersonCard> { key ->
+                    PersonCardScreen(
+                        state,
+                        vm,
+                        key.personId,
+                        key.cardId,
+                        onSecureWindow,
+                        onBack = { backStack.removeLastOrNull() },
+                    )
+                }
+                entry<RoutePersonIban> { key ->
+                    PersonIbanScreen(
+                        state,
+                        vm,
+                        key.personId,
+                        key.bankAccountId,
+                        onSecureWindow,
+                        onBack = { backStack.removeLastOrNull() },
+                    )
                 }
                 entry<RouteCategories> { CategoriesScreen(state, vm) { notify(it) } }
                 entry<RouteVault> {
@@ -1392,9 +1421,22 @@ fun CardFormScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> U
                 error = WriteFailures.ERR_NO_ACTIVITY
                 return@PrimaryWideButton
             }
-            if (!IbanMath.isValidIranIban(iban)) {
-                error = host.getString(R.string.invalid_iban)
-            } else {
+            when (VaultInput.validateBankAccount(accountNumber, iban)) {
+                VaultFieldError.ACCOUNT -> {
+                    error = host.getString(R.string.invalid_account_number)
+                    return@PrimaryWideButton
+                }
+                VaultFieldError.IBAN -> {
+                    error = host.getString(R.string.invalid_iban)
+                    return@PrimaryWideButton
+                }
+                null -> Unit
+                else -> {
+                    error = host.getString(R.string.invalid_iban)
+                    return@PrimaryWideButton
+                }
+            }
+            run {
                 val accountId = ledgerAccountId ?: return@PrimaryWideButton
                 host.lifecycleScope.launch {
                     runCatching {
@@ -1672,7 +1714,7 @@ fun SettingsScreen(state: AppUiState, vm: AppViewModel) {
     }
 }
 
-private fun Context.findMainActivity(): MainActivity? {
+internal fun Context.findMainActivity(): MainActivity? {
     var current: Context? = this
     while (current is android.content.ContextWrapper) {
         if (current is MainActivity) return current
