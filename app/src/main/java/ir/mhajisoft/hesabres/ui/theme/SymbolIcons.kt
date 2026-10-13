@@ -19,54 +19,31 @@ import androidx.compose.ui.unit.dp
  * autoMirrored is only applied to directional icons (swap / back).
  */
 object SymbolIcons {
-    val Home = Icons.Rounded.Home
-    val Receipt = roundedSymbol("receipt") { receipt() }
-    val Chart = roundedSymbol("chart") { trend() }
-    val More = roundedSymbol("more") { more() }
+    val Home: ImageVector get() = byKey("home")
+    val Receipt: ImageVector get() = byKey("receipt_long")
+    val Chart: ImageVector get() = byKey("trending_up")
+    val More: ImageVector get() = byKey("more_horiz")
     val Add = Icons.Rounded.Add
     val Back = Icons.AutoMirrored.Rounded.ArrowBack
-    val Wallet = roundedSymbol("wallet") { wallet() }
-    val People = roundedSymbol("people") { people() }
-    val Category = roundedSymbol("category") { category() }
-    val Card = roundedSymbol("card") { card() }
+    val Wallet: ImageVector get() = byKey("wallet")
+    val People: ImageVector get() = byKey("people")
+    val Category: ImageVector get() = byKey("category")
+    val Card: ImageVector get() = byKey("payments")
     /** Points toward the leading edge so a row in RTL discloses to the left. */
-    val Chevron = roundedSymbol("chevron") { chevron() }
-    val Lock = roundedSymbol("lock") { lock() }
-    val Settings = roundedSymbol("settings") { settings() }
-    val Archive = roundedSymbol("archive") { archive() }
-    val Report = roundedSymbol("report") { report() }
+    val Chevron: ImageVector get() = once("chevron") { roundedSymbol("chevron") { chevron() } }
+    val Lock: ImageVector get() = once("lock") { roundedSymbol("lock") { lock() } }
+    val Settings: ImageVector get() = once("settings") { roundedSymbol("settings") { settings() } }
+    val Archive: ImageVector get() = once("archive") { roundedSymbol("archive") { archive() } }
+    val Report: ImageVector get() = once("report") { roundedSymbol("report") { report() } }
 
-    fun byKey(key: String): ImageVector = cache.getOrPut(key) {
-        when (key) {
-            "restaurant", "local_dining", "coffee" -> roundedSymbol("restaurant") { dining() }
-            "directions_car", "fuel" -> roundedSymbol("car") { car() }
-            "home" -> Home
-            "bolt", "wifi" -> roundedSymbol("bolt") { bolt() }
-            "health_and_safety", "spa" -> roundedSymbol("health") { health() }
-            "school", "menu_book" -> roundedSymbol("school") { school() }
-            "checkroom" -> roundedSymbol("checkroom") { checkroom() }
-            "sports_esports" -> roundedSymbol("games") { games() }
-            "shopping_bag" -> roundedSymbol("bag") { bag() }
-            "flight" -> roundedSymbol("flight") { flight() }
-            "family_restroom", "child_care", "people" -> People
-            "policy" -> roundedSymbol("policy") { shield() }
-            "volunteer_activism" -> roundedSymbol("charity") { favorite() }
-            "handyman" -> roundedSymbol("repair") { build() }
-            "more_horiz" -> More
-            "payments", "add_card", "work" -> Card
-            "storefront" -> roundedSymbol("store") { store() }
-            "card_giftcard" -> roundedSymbol("gift") { gift() }
-            "trending_up", "star" -> roundedSymbol("trend") { trend() }
-            "swap_horiz" -> swap()
-            "receipt_long" -> Receipt
-            "account_balance", "wallet" -> Wallet
-            "phone" -> roundedSymbol("phone") { phone() }
-            "pets" -> roundedSymbol("pets") { pets() }
-            "music_note" -> roundedSymbol("music") { music() }
-            "water_drop" -> roundedSymbol("water") { water() }
-            else -> Category
-        }
-    }
+    /**
+     * Each distinct drawing is built once and reused. Aliases share that instance.
+     * Unknown keys return [Category].
+     */
+    fun byKey(key: String): ImageVector = once(canonical[key] ?: "category") { create(canonical[key] ?: "category") }
+
+    /** Every key [byKey] recognizes, including aliases. */
+    val knownIconKeys: Set<String> get() = canonical.keys
 
     val customIconKeys = listOf(
         "restaurant", "coffee", "directions_car", "fuel", "home", "bolt",
@@ -83,8 +60,88 @@ object SymbolIcons {
         0xFF9A3412L, 0xFF57534EL, 0xFF4F46E5L, 0xFFE11D48L, 0xFF334155L, 0xFF0F766EL,
     )
 
+    private val canonical = mapOf(
+        "restaurant" to "restaurant",
+        "local_dining" to "restaurant",
+        "coffee" to "restaurant",
+        "directions_car" to "car",
+        "fuel" to "car",
+        "home" to "home",
+        "bolt" to "bolt",
+        "wifi" to "bolt",
+        "health_and_safety" to "health",
+        "spa" to "health",
+        "school" to "school",
+        "menu_book" to "school",
+        "checkroom" to "checkroom",
+        "sports_esports" to "games",
+        "shopping_bag" to "bag",
+        "flight" to "flight",
+        "family_restroom" to "people",
+        "child_care" to "people",
+        "people" to "people",
+        "policy" to "policy",
+        "volunteer_activism" to "charity",
+        "handyman" to "repair",
+        "more_horiz" to "more",
+        "payments" to "card",
+        "add_card" to "card",
+        "work" to "card",
+        "storefront" to "store",
+        "card_giftcard" to "gift",
+        "trending_up" to "chart",
+        "star" to "chart",
+        "swap_horiz" to "swap",
+        "receipt_long" to "receipt",
+        "account_balance" to "wallet",
+        "wallet" to "wallet",
+        "phone" to "phone",
+        "pets" to "pets",
+        "music_note" to "music",
+        "water_drop" to "water",
+        "category" to "category",
+    )
+
     private val cache = mutableMapOf<String, ImageVector>()
 
+    private fun once(id: String, factory: () -> ImageVector): ImageVector = cache.getOrPut(id, factory)
+
+    private fun create(id: String): ImageVector = when (id) {
+        "restaurant" -> roundedSymbol("restaurant") { dining() }
+        "car" -> roundedSymbol("car") { car() }
+        "home" -> Icons.Rounded.Home
+        "bolt" -> roundedSymbol("bolt") { bolt() }
+        "health" -> roundedSymbol("health") { health() }
+        "school" -> roundedSymbol("school") { school() }
+        "checkroom" -> roundedSymbol("checkroom") { checkroom() }
+        "games" -> roundedSymbol("games") { games() }
+        "bag" -> roundedSymbol("bag") { bag() }
+        "flight" -> roundedSymbol("flight") { flight() }
+        "people" -> roundedSymbol("people") { people() }
+        "policy" -> roundedSymbol("policy") { shield() }
+        "charity" -> roundedSymbol("charity") { favorite() }
+        "repair" -> roundedSymbol("repair") { repair() }
+        "more" -> roundedSymbol("more") { more() }
+        "card" -> roundedSymbol("card") { card() }
+        "store" -> roundedSymbol("store") { store() }
+        "gift" -> roundedSymbol("gift") { gift() }
+        "chart" -> roundedSymbol("chart") { trend() }
+        "swap" -> swap()
+        "receipt" -> roundedSymbol("receipt") { receipt() }
+        "wallet" -> roundedSymbol("wallet") { wallet() }
+        "phone" -> roundedSymbol("phone") { phone() }
+        "pets" -> roundedSymbol("pets") { pets() }
+        "music" -> roundedSymbol("music") { music() }
+        "water" -> roundedSymbol("water") { water() }
+        "category" -> roundedSymbol("category") { category() }
+        else -> byKey("category")
+    }
+
+    /**
+     * A new [ImageVector.Builder] is allocated for every call and [ImageVector.Builder.build]
+     * runs exactly once. Do not name a path helper `build`: that member wins over an
+     * extension of the same name and consumes the builder before this method can.
+     */
     private fun roundedSymbol(name: String, add: ImageVector.Builder.() -> Unit): ImageVector {
         val builder = ImageVector.Builder(
             name = name,
@@ -177,7 +234,7 @@ object SymbolIcons {
         curveTo(22f, 11.9f, 18.6f, 15f, 13.4f, 19.7f); close()
     }
 
-    private fun ImageVector.Builder.build() = p {
+    private fun ImageVector.Builder.repair() = p {
         moveTo(22.7f, 19f); lineTo(13.6f, 9.9f); curveTo(14.5f, 7.6f, 14f, 4.9f, 12.1f, 3f)
         curveTo(10.1f, 1f, 7.1f, 0.6f, 4.7f, 1.7f); lineTo(9f, 6f); lineTo(6f, 9f); lineTo(1.6f, 4.7f)
         curveTo(0.4f, 7.1f, 0.9f, 10.1f, 2.9f, 12.1f); curveTo(4.8f, 14f, 7.5f, 14.5f, 9.8f, 13.6f)
