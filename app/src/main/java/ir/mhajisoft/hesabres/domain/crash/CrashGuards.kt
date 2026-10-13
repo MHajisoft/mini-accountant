@@ -70,10 +70,29 @@ object WriteFailures {
     }
 }
 
+object SwallowedErrors {
+    @Volatile
+    var sink: (String, Throwable) -> Unit = { _, _ -> }
+
+    fun report(where: String, error: Throwable) {
+        try {
+            sink(where, error)
+        } catch (_: Throwable) {
+        }
+    }
+}
+
 object DomainLists {
     /** One poison row must not fail the whole Room flow and crash startup. */
     fun <T, R> safeMap(items: List<T>, map: (T) -> R): List<R> =
-        items.mapNotNull { item -> runCatching { map(item) }.getOrNull() }
+        items.mapNotNull { item ->
+            try {
+                map(item)
+            } catch (t: Throwable) {
+                SwallowedErrors.report("safeMap", t)
+                null
+            }
+        }
 }
 
 object ArgbColors {

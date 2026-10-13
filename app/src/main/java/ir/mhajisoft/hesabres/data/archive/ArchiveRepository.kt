@@ -5,6 +5,7 @@ import androidx.room3.useWriterConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import dagger.hilt.android.qualifiers.ApplicationContext
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.data.local.dao.ArchiveDao
 import ir.mhajisoft.hesabres.data.local.dao.FiscalYearDao
 import ir.mhajisoft.hesabres.data.local.dao.SnapshotDao
@@ -49,6 +50,7 @@ class ArchiveRepository @Inject constructor(
     private fun archivesDir(): File = File(context.filesDir, "archives").apply { mkdirs() }
 
     suspend fun archiveClosedYear(fiscalYearId: String): ArchiveRecord = withContext(Dispatchers.IO) {
+        DiagnosticLog.breadcrumb("db", "archive start")
         val fy = fiscalYears.get(fiscalYearId) ?: error("missing fy")
         require(!fy.isCurrent) { "سال جاری را ابتدا ببندید" }
         val now = System.currentTimeMillis()
@@ -110,6 +112,7 @@ class ArchiveRepository @Inject constructor(
                 record.byteSize, record.sha256, record.rowCount, record.status.name,
             ),
         )
+        DiagnosticLog.breadcrumb("db", "archive ok")
         record
     }
 

@@ -3,9 +3,12 @@ package ir.mhajisoft.hesabres.data.local.db
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override suspend fun migrate(connection: SQLiteConnection) {
+        DiagnosticLog.breadcrumb("db", "migration 1 to 2 start")
+        try {
         connection.execSQL("ALTER TABLE people ADD COLUMN firstName TEXT NOT NULL DEFAULT ''")
         connection.execSQL("ALTER TABLE people ADD COLUMN lastName TEXT NOT NULL DEFAULT ''")
         connection.execSQL("ALTER TABLE people ADD COLUMN email TEXT")
@@ -16,11 +19,18 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         connection.execSQL("UPDATE people SET firstName = name WHERE firstName = ''")
         connection.execSQL("ALTER TABLE bank_cards ADD COLUMN personId TEXT")
         connection.execSQL("ALTER TABLE bank_accounts ADD COLUMN personId TEXT")
+            DiagnosticLog.breadcrumb("db", "migration 1 to 2 done")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("db.migration.1to2", t)
+            throw t
+        }
     }
 }
 
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override suspend fun migrate(connection: SQLiteConnection) {
+        DiagnosticLog.breadcrumb("db", "migration 2 to 3 start")
+        try {
         connection.execSQL(
             """
             CREATE TABLE IF NOT EXISTS person_social_links (
@@ -58,5 +68,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
             WHERE whatsapp IS NOT NULL AND trim(whatsapp) != ''
             """.trimIndent(),
         )
+            DiagnosticLog.breadcrumb("db", "migration 2 to 3 done")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("db.migration.2to3", t)
+            throw t
+        }
     }
 }

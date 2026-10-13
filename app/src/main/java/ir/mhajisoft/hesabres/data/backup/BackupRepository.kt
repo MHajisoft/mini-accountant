@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.room3.useWriterConnection
 import androidx.sqlite.execSQL
 import dagger.hilt.android.qualifiers.ApplicationContext
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.data.cloud.CloudBackupClient
 import ir.mhajisoft.hesabres.data.cloud.CloudKind
 import ir.mhajisoft.hesabres.data.local.dao.BackupMetadataDao
@@ -64,6 +65,8 @@ class BackupRepository @Inject constructor(
     fun oneDriveAvailability() = oneDrive.availability()
 
     suspend fun createEncryptedBackup(passphrase: String): ByteArray = withContext(Dispatchers.IO) {
+        DiagnosticLog.breadcrumb("backup", "create start")
+        try {
         checkpoint()
         val cardsSanitized = BackupSanitizer.sanitizeCards(
             cards.getAll().map {
@@ -90,10 +93,16 @@ class BackupRepository @Inject constructor(
             rowCount = sqlite.size,
         )
         val zip = buildZip(manifest, sqliteGz, cardsSanitized)
-        encrypt(zip, passphrase)
+        encrypt(zip, passphrase).also { DiagnosticLog.breadcrumb("backup", "create ok") }
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("backup.create", t)
+            throw t
+        }
     }
 
     suspend fun restoreEncrypted(bytes: ByteArray, passphrase: String) = withContext(Dispatchers.IO) {
+        DiagnosticLog.breadcrumb("backup", "restore start")
+        try {
         val zip = decrypt(bytes, passphrase)
         val files = unzip(zip)
         val manifestBytes = files["manifest.json"] ?: error("manifest")
@@ -107,6 +116,11 @@ class BackupRepository @Inject constructor(
         FileSibling.deleteSidecars(dest)
         dest.parentFile?.mkdirs()
         dest.writeBytes(sqlite)
+        DiagnosticLog.breadcrumb("backup", "restore ok")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("backup.restore", t)
+            throw t
+        }
     }
 
     fun restartProcess(context: Context) {
@@ -117,13 +131,26 @@ class BackupRepository @Inject constructor(
     }
 
     suspend fun writeToSaf(uri: Uri, bytes: ByteArray) = withContext(Dispatchers.IO) {
-        context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
-            ?: error("cannot write")
+        DiagnosticLog.breadcrumb("backup", "write file start")
+        try {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                ?: error("cannot write")
+            DiagnosticLog.breadcrumb("backup", "write file ok")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("backup.write", t)
+            throw t
+        }
     }
 
     suspend fun readFromSaf(uri: Uri): ByteArray = withContext(Dispatchers.IO) {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("cannot read")
+        DiagnosticLog.breadcrumb("backup", "read file start")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: error("cannot read")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("backup.read", t)
+            throw t
+        }.also { DiagnosticLog.breadcrumb("backup", "read file ok") }
     }
 
     suspend fun recordLocal(uri: String, bytes: ByteArray) {
@@ -143,11 +170,17 @@ class BackupRepository @Inject constructor(
     }
 
     suspend fun uploadCloud(kind: CloudKind, bytes: ByteArray): Result<Unit> {
+        DiagnosticLog.breadcrumb("backup", "cloud ${kind.name} start")
         val client: CloudBackupClient = if (kind == CloudKind.DRIVE) drive else oneDrive
         val avail = client.availability()
-        if (!avail.available) return Result.failure(IllegalStateException(avail.reasonFa))
+        if (!avail.available) {
+            DiagnosticLog.breadcrumb("backup", "cloud unavailable")
+            return Result.failure(IllegalStateException(avail.reasonFa))
+        }
         val name = "mini-accountant-${System.currentTimeMillis()}.$BACKUP_FILE_EXTENSION"
         val uploaded = client.upload(name, bytes)
+        uploaded.exceptionOrNull()?.let { DiagnosticLog.recordCaught("backup.cloud", it) }
+            ?: DiagnosticLog.breadcrumb("backup", "cloud ok")
         return uploaded.map { snap ->
             val provider = if (kind == CloudKind.DRIVE) BackupProvider.DRIVE_APPDATA else BackupProvider.ONEDRIVE_APPROOT
             metadataDao.upsert(

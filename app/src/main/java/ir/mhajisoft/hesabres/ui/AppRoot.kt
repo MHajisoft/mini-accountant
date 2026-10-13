@@ -103,6 +103,7 @@ import ir.mhajisoft.hesabres.domain.bank.CardMath
 import ir.mhajisoft.hesabres.domain.bank.IbanMath
 import ir.mhajisoft.hesabres.domain.bank.VaultFieldError
 import ir.mhajisoft.hesabres.domain.bank.VaultInput
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.domain.crash.TabStack
 import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
@@ -165,6 +166,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteBackup : NavKey
 @Serializable data object RouteLock : NavKey
 @Serializable data object RouteSettings : NavKey
+@Serializable data object RouteDiagnostics : NavKey
 @Serializable data class RouteFiltered(val categoryId: String? = null, val accountId: String? = null) : NavKey
 @Serializable data class RouteArchiveViewer(val fileName: String) : NavKey
 
@@ -179,11 +181,16 @@ fun AppRoot(
         LinearProgressIndicator(Modifier.fillMaxWidth())
         return
     }
+    if (state.startupError) {
+        StartupDiagnosticsScreen()
+        return
+    }
     if (!state.settings.onboarded) {
         OnboardingScreen(vm)
         return
     }
     val backStack = rememberNavBackStack(RouteHome)
+    if (backStack.isEmpty()) backStack.add(RouteHome)
     var showComposer by remember { mutableStateOf(false) }
     var composerMode by remember { mutableIntStateOf(0) }
     val snack = remember { SnackbarHostState() }
@@ -192,6 +199,16 @@ fun AppRoot(
     fun notify(msg: String) { scope.launch { snack.showSnackbar(msg) } }
     LaunchedEffect(Unit) {
         vm.messages.collect { notify(it) }
+    }
+    val screen = backStack.lastOrNull()?.let { it::class.simpleName ?: "route" }
+    LaunchedEffect(screen) {
+        if (screen != null) DiagnosticLog.breadcrumb("nav", screen)
+    }
+    var composerWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(showComposer) {
+        if (showComposer == composerWasOpen) return@LaunchedEffect
+        composerWasOpen = showComposer
+        DiagnosticLog.breadcrumb("sheet", if (showComposer) "composer open" else "composer close")
     }
     val navColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -266,7 +283,7 @@ fun AppRoot(
         NavDisplay(
             backStack = backStack,
             modifier = Modifier.padding(padding),
-            onBack = { backStack.removeLastOrNull() },
+            onBack = { popRoute(backStack) },
             entryProvider = entryProvider {
                 entry<RouteHome> {
                     HomeScreen(
@@ -300,7 +317,7 @@ fun AppRoot(
                         state,
                         vm,
                         key.personId,
-                        onBack = { backStack.removeLastOrNull() },
+                        onBack = { popRoute(backStack) },
                         onEdit = { backStack.add(RoutePersonEdit(key.personId)) },
                         onAddCard = { backStack.add(RoutePersonCard(key.personId)) },
                         onEditCard = { backStack.add(RoutePersonCard(key.personId, it)) },
@@ -310,7 +327,7 @@ fun AppRoot(
                     )
                 }
                 entry<RoutePersonEdit> { key ->
-                    PersonEditScreen(state, vm, key.personId, onBack = { backStack.removeLastOrNull() })
+                    PersonEditScreen(state, vm, key.personId, onBack = { popRoute(backStack) })
                 }
                 entry<RoutePersonCard> { key ->
                     PersonCardScreen(
@@ -319,7 +336,7 @@ fun AppRoot(
                         key.personId,
                         key.cardId,
                         onSecureWindow,
-                        onBack = { backStack.removeLastOrNull() },
+                        onBack = { popRoute(backStack) },
                     )
                 }
                 entry<RoutePersonIban> { key ->
@@ -329,7 +346,7 @@ fun AppRoot(
                         key.personId,
                         key.bankAccountId,
                         onSecureWindow,
-                        onBack = { backStack.removeLastOrNull() },
+                        onBack = { popRoute(backStack) },
                     )
                 }
                 entry<RouteCategories> { CategoriesScreen(state, vm) { notify(it) } }
@@ -343,6 +360,7 @@ fun AppRoot(
                 entry<RouteBackup> { BackupScreen(vm) }
                 entry<RouteLock> { LockSettingsScreen(state, vm) }
                 entry<RouteSettings> { SettingsScreen(state, vm) }
+                entry<RouteDiagnostics> { DiagnosticsScreen() }
                 entry<RouteFiltered> { key ->
                     TxnListScreen(
                         state.copy(
@@ -376,6 +394,10 @@ fun AppRoot(
 
 private fun rewind(stack: NavBackStack<NavKey>, tab: NavKey) {
     TabStack.switchTo(stack, tab)
+}
+
+private fun popRoute(stack: NavBackStack<NavKey>) {
+    if (stack.size > 1) stack.removeLastOrNull()
 }
 
 @Composable
@@ -939,6 +961,7 @@ fun MoreScreen(open: (NavKey) -> Unit) {
         Triple(R.string.backup, RouteBackup, SymbolIcons.Receipt),
         Triple(R.string.lock, RouteLock, SymbolIcons.Lock),
         Triple(R.string.settings, RouteSettings, SymbolIcons.Settings),
+        Triple(R.string.crash_reports, RouteDiagnostics, SymbolIcons.Report),
     )
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -1691,7 +1714,10 @@ fun LockSettingsScreen(state: AppUiState, vm: AppViewModel) {
 
 @Composable
 fun SettingsScreen(state: AppUiState, vm: AppViewModel) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         ScreenHeader(stringResource(R.string.settings))
         FinanceCard {
             SectionLabel(stringResource(R.string.display_unit))
@@ -1711,6 +1737,7 @@ fun SettingsScreen(state: AppUiState, vm: AppViewModel) {
                 }
             }
         }
+        CrashReportSection()
     }
 }
 

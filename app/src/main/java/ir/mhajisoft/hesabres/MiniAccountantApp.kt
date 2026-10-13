@@ -6,6 +6,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.HiltAndroidApp
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.data.local.datastore.SettingsDataStore
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
 import ir.amirroid.jalalidate.configuration.JalaliDateGlobalConfiguration
@@ -26,7 +27,9 @@ class MiniAccountantApp : Application() {
     @Inject lateinit var lockController: AppLockController
 
     override fun onCreate() {
+        DiagnosticLog.install(this)
         super.onCreate()
+        DiagnosticLog.start(this)
         JalaliDateGlobalConfiguration.convertAlgorithm = LibBirashk
         val fa = Locale.forLanguageTag("fa")
         Locale.setDefault(fa)
@@ -38,7 +41,9 @@ class MiniAccountantApp : Application() {
 class AppLockController @Inject constructor(
     private val settings: SettingsDataStore,
 ) : DefaultLifecycleObserver {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + DiagnosticLog.coroutineHandler("app-lock"),
+    )
     private val _locked = MutableStateFlow(false)
     val locked: StateFlow<Boolean> = _locked
     @Volatile private var lastBackground: Long = 0L
