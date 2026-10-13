@@ -10,6 +10,7 @@ import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.data.local.dao.SecretBlobDao
 import ir.mhajisoft.hesabres.data.local.entity.SecretBlobEntity
 import java.security.GeneralSecurityException
@@ -71,8 +72,10 @@ class SecretVault @Inject constructor(
         val key = cvvKey() ?: return null
         Cipher.getInstance(AES_GCM).also { it.init(Cipher.ENCRYPT_MODE, key) }
     } catch (t: GeneralSecurityException) {
+        DiagnosticLog.recordCaught("keystore.cvv", t)
         null
     } catch (t: IllegalArgumentException) {
+        DiagnosticLog.recordCaught("keystore.cvv", t)
         null
     }
 
@@ -83,8 +86,10 @@ class SecretVault @Inject constructor(
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
             cipher
         } catch (t: GeneralSecurityException) {
+            DiagnosticLog.recordCaught("keystore.cvv", t)
             null
         } catch (t: IllegalArgumentException) {
+            DiagnosticLog.recordCaught("keystore.cvv", t)
             null
         }
     }
@@ -150,15 +155,23 @@ class SecretVault @Inject constructor(
             generator.generateKey()
             true
         } catch (t: GeneralSecurityException) {
+            DiagnosticLog.recordCaught("keystore.cvv", t)
             false
         } catch (t: IllegalArgumentException) {
+            DiagnosticLog.recordCaught("keystore.cvv", t)
             false
         }
     }
 
-    private fun cvvKey(): SecretKey? {
+    private fun cvvKey(): SecretKey? = try {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        return ks.getKey(CVV_KEY_ALIAS, null) as? SecretKey
+        ks.getKey(CVV_KEY_ALIAS, null) as? SecretKey
+    } catch (t: GeneralSecurityException) {
+        DiagnosticLog.recordCaught("keystore.cvv", t)
+        null
+    } catch (t: IllegalArgumentException) {
+        DiagnosticLog.recordCaught("keystore.cvv", t)
+        null
     }
 
     companion object {

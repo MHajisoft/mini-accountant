@@ -223,4 +223,15 @@
     <string name="balance_you">به نفع شما</string>
     <string name="balance_them">به نفع او</string>
     <string name="balance_even">بدون مانده</string>
+    <string name="crash_reports">گزارش خطا</string>
+    <string name="crash_reports_body">اگر برنامه بسته شد، فایل این پوشه را با مدیر فایل باز کنید و برای ما بفرستید.</string>
+    <string name="crash_reports_path">پوشه: Documents/Hesabres/logs</string>
+    <string name="share_logs">ارسال گزارش</string>
+    <string name="clear_logs">پاک کردن گزارش‌ها</string>
+    <string name="clear_logs_confirm">گزارش‌های ذخیره‌شده پاک شوند؟</string>
+    <string name="logs_cleared">گزارش‌ها پاک شد.</string>
+    <string name="logs_empty">هنوز گزارشی ذخیره نشده.</string>
+    <string name="logs_share_failed">ارسال گزارش ممکن نشد.</string>
+    <string name="startup_failed">برنامه کامل باز نشد. گزارش را بفرستید تا خطا را ببینیم.</string>
+    <string name="allow_log_folder">اجازهٔ ذخیره در پوشهٔ اسناد</string>
 </resources>

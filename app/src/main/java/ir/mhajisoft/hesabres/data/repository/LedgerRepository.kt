@@ -37,6 +37,7 @@ import ir.mhajisoft.hesabres.domain.model.SocialLink
 import ir.mhajisoft.hesabres.domain.model.Transfer
 import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
 import ir.mhajisoft.hesabres.domain.crash.DomainLists
+import ir.mhajisoft.hesabres.domain.crash.SwallowedErrors
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -72,7 +73,9 @@ class LedgerRepository @Inject constructor(
     val accountsFlow: Flow<List<Account>> = accounts.observeAll().map { list ->
         DomainLists.safeMap(list) { it.toDomain() }
     }
-    val activeAccountsFlow: Flow<List<Account>> = accounts.observeActive().map { list -> list.map { it.toDomain() } }
+    val activeAccountsFlow: Flow<List<Account>> = accounts.observeActive().map { list ->
+        DomainLists.safeMap(list) { it.toDomain() }
+    }
     val categoriesFlow: Flow<List<Category>> = categories.observeAll().map { list ->
         DomainLists.safeMap(list) { it.toDomain() }
     }
@@ -96,7 +99,8 @@ class LedgerRepository @Inject constructor(
     ) { persons, links ->
         val byPerson = links.groupBy { it.personId }
         DomainLists.safeMap(persons) { entity ->
-            entity.toDomain(byPerson[entity.id].orEmpty().map { it.toDomain() })
+            val links = DomainLists.safeMap(byPerson[entity.id].orEmpty()) { it.toDomain() }
+            entity.toDomain(links)
         }
     }
     val openingsFlow: Flow<Map<String, Long>> = combine(
@@ -471,7 +475,14 @@ class LedgerRepository @Inject constructor(
         txns.search(query).map { list -> DomainLists.safeMap(list) { it.toDomain() } }
 
     suspend fun accountById(id: String): Account? =
-        accounts.get(id)?.let { row -> runCatching { row.toDomain() }.getOrNull() }
+        accounts.get(id)?.let { row ->
+            try {
+                row.toDomain()
+            } catch (t: Throwable) {
+                SwallowedErrors.report("account.get", t)
+                null
+            }
+        }
 
     suspend fun txnCount(): Int = txns.count()
 }

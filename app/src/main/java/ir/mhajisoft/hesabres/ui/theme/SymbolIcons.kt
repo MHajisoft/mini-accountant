@@ -34,6 +34,7 @@ object SymbolIcons {
     val Lock = roundedSymbol("lock") { lock() }
     val Settings = roundedSymbol("settings") { settings() }
     val Archive = roundedSymbol("archive") { archive() }
+    val Report = roundedSymbol("report") { report() }
 
     fun byKey(key: String): ImageVector = cache.getOrPut(key) {
         when (key) {
@@ -310,6 +311,13 @@ object SymbolIcons {
         moveTo(9.2f, 10f); horizontalLineTo(21f); verticalLineTo(14.2f); horizontalLineTo(9.2f); close()
         moveTo(3f, 16f); horizontalLineTo(15f); verticalLineTo(18.2f); horizontalLineTo(3f); close()
         moveTo(17.2f, 15f); horizontalLineTo(21f); verticalLineTo(19.2f); horizontalLineTo(17.2f); close()
+    }
+
+    private fun ImageVector.Builder.report() = p {
+        moveTo(6f, 2f); horizontalLineTo(14f); lineTo(20f, 8f); verticalLineTo(22f); horizontalLineTo(6f); close()
+        moveTo(13f, 3.5f); verticalLineTo(9f); horizontalLineTo(18.5f)
+        moveTo(8f, 13f); horizontalLineTo(16f); verticalLineTo(15f); horizontalLineTo(8f); close()
+        moveTo(8f, 17f); horizontalLineTo(13f); verticalLineTo(19f); horizontalLineTo(8f); close()
     }
 
     private fun ImageVector.Builder.archive() = p {

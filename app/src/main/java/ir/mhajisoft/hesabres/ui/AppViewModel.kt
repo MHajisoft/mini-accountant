@@ -21,14 +21,17 @@ import ir.mhajisoft.hesabres.domain.model.CategoryKind
 import ir.mhajisoft.hesabres.domain.model.Direction
 import ir.mhajisoft.hesabres.domain.model.FiscalYear
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.domain.ledger.ComposerRules
 import ir.mhajisoft.hesabres.domain.model.Person
 import ir.mhajisoft.hesabres.domain.money.Money
 import ir.mhajisoft.hesabres.domain.people.SettleRules
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -48,6 +51,7 @@ data class AppUiState(
     val fy: FiscalYear? = null,
     val fiscalYears: List<FiscalYear> = emptyList(),
     val ready: Boolean = false,
+    val startupError: Boolean = false,
 ) {
     val total: Long
         get() = balances.filter { it.account.includeInTotal }.sumOf { it.balanceSigned }
@@ -101,18 +105,31 @@ class AppViewModel @Inject constructor(
             fiscalYears = right.third.second,
             ready = true,
         )
+    }.catch { error ->
+        DiagnosticLog.recordCaught("ui.state", error)
+        emit(AppUiState(ready = true, startupError = true))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages
     private val onboardingOnce = AtomicBoolean(false)
 
+    private fun loggedLaunch(block: suspend CoroutineScope.() -> Unit) {
+        viewModelScope.launch(DiagnosticLog.coroutineHandler("viewmodel"), block = block)
+    }
+
+    private fun mappedFailure(where: String, t: Throwable): String {
+        DiagnosticLog.recordCaught(where, t)
+        return WriteFailures.map(t)
+    }
+
     private fun report(t: Throwable) {
-        _messages.tryEmit(WriteFailures.map(t))
+        _messages.tryEmit(mappedFailure("viewmodel", t))
     }
 
     init {
-        viewModelScope.launch {
+        loggedLaunch {
+            DiagnosticLog.breadcrumb("db", "startup seed")
             runCatching {
                 val s = settingsStore.settings.first()
                 val now = System.currentTimeMillis()
@@ -120,6 +137,8 @@ class AppViewModel @Inject constructor(
                 if (s.onboarded) {
                     ledger.ensureSeeded(now, s.fyStartMonth, s.fyStartDay)
                 }
+            }.onSuccess {
+                DiagnosticLog.breadcrumb("db", "startup seed ok")
             }.onFailure { report(it) }
         }
     }
@@ -133,7 +152,7 @@ class AppViewModel @Inject constructor(
         onError: (String) -> Unit = {},
     ) {
         if (!onboardingOnce.compareAndSet(false, true)) return
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 val now = System.currentTimeMillis()
                 settingsStore.setFyStart(startMonth, startDay)
@@ -159,7 +178,7 @@ class AppViewModel @Inject constructor(
                 }
             }.onFailure {
                 onboardingOnce.set(false)
-                onError(WriteFailures.map(it))
+                onError(mappedFailure("viewmodel", it))
             }
         }
     }
@@ -174,7 +193,8 @@ class AppViewModel @Inject constructor(
         onError: (String) -> Unit = {},
         onOk: () -> Unit = {},
     ) {
-        viewModelScope.launch {
+        loggedLaunch {
+            DiagnosticLog.breadcrumb("txn", if (income) "save income" else "save expense")
             val ui = state.value
             val resolved = ComposerRules.resolveSpendAccountId(accountId, ui.accounts)
             val err = ComposerRules.validate(
@@ -190,13 +210,13 @@ class AppViewModel @Inject constructor(
             )
             if (err != null) {
                 onError(err)
-                return@launch
+                return@loggedLaunch
             }
             val ledgerAccountId = resolved ?: run {
                 onError(ComposerRules.ERR_PICK_ACCOUNT)
-                return@launch
+                return@loggedLaunch
             }
-            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@loggedLaunch
             runCatching {
                 ledger.newExpenseOrIncome(
                     accountId = ledgerAccountId,
@@ -207,9 +227,10 @@ class AppViewModel @Inject constructor(
                     occurredAt = occurredAt,
                 )
             }.onSuccess {
+                DiagnosticLog.breadcrumb("txn", if (income) "save income ok" else "save expense ok")
                 settingsStore.setLastUsed(ledgerAccountId, categoryId, expense = !income)
                 onOk()
-            }.onFailure { onError(WriteFailures.map(it)) }
+            }.onFailure { onError(mappedFailure("txn.save", it)) }
         }
     }
 
@@ -223,7 +244,8 @@ class AppViewModel @Inject constructor(
         onError: (String) -> Unit = {},
         onOk: () -> Unit = {},
     ) {
-        viewModelScope.launch {
+        loggedLaunch {
+            DiagnosticLog.breadcrumb("txn", "save transfer")
             val ui = state.value
             val err = ComposerRules.validate(
                 ComposerRules.Draft(
@@ -240,24 +262,27 @@ class AppViewModel @Inject constructor(
             )
             if (err != null) {
                 onError(err)
-                return@launch
+                return@loggedLaunch
             }
-            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@loggedLaunch
             val fee = Money.parseDisplayAmount(feeDisplay, ui.settings.displayToman)
             runCatching { ledger.postTransfer(from, to, amount, fee, at, note) }
-                .onSuccess { onOk() }
-                .onFailure { onError(WriteFailures.map(it)) }
+                .onSuccess {
+                    DiagnosticLog.breadcrumb("txn", "save transfer ok")
+                    onOk()
+                }
+                .onFailure { onError(mappedFailure("txn.transfer", it)) }
         }
     }
 
     fun deleteTxn(id: String) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching { ledger.deleteTransaction(id) }.onFailure { report(it) }
         }
     }
 
     fun addAccount(name: String, type: AccountType, include: Boolean, opening: Long) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 val now = System.currentTimeMillis()
                 val acc = Account(
@@ -278,31 +303,31 @@ class AppViewModel @Inject constructor(
     }
 
     fun addCustomCategory(name: String, iconKey: String, color: Long, kind: CategoryKind) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching { ledger.addCustomCategory(name, iconKey, color, kind) }.onFailure { report(it) }
         }
     }
 
     fun deleteCustomCategory(id: String, onError: (String) -> Unit = {}) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching { ledger.deleteCustomCategory(id) }
-                .onFailure { onError(WriteFailures.map(it)) }
+                .onFailure { onError(mappedFailure("viewmodel", it)) }
         }
     }
 
     fun archiveAccount(id: String, archived: Boolean) {
-        viewModelScope.launch { runCatching { ledger.archiveAccount(id, archived) }.onFailure { report(it) } }
+        loggedLaunch { runCatching { ledger.archiveAccount(id, archived) }.onFailure { report(it) } }
     }
 
     fun updateAccount(account: Account) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching { ledger.upsertAccount(account.copy(updatedAt = System.currentTimeMillis())) }
                 .onFailure { report(it) }
         }
     }
 
     fun deleteTxnOrTransfer(txn: LedgerTransaction) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 val transferId = txn.transferId
                 if (transferId != null) ledger.deleteTransfer(transferId) else ledger.deleteTransaction(txn.id)
@@ -319,21 +344,21 @@ class AppViewModel @Inject constructor(
         avatarColor: Long,
         socials: List<ir.mhajisoft.hesabres.domain.model.SocialLink>,
     ) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching { ledger.createPerson(firstName, lastName, phone, email, note, avatarColor, socials) }
                 .onFailure { report(it) }
         }
     }
 
     fun updatePerson(person: Person) {
-        viewModelScope.launch { runCatching { ledger.updatePersonProfile(person) }.onFailure { report(it) } }
+        loggedLaunch { runCatching { ledger.updatePersonProfile(person) }.onFailure { report(it) } }
     }
 
-    fun setToman(v: Boolean) { viewModelScope.launch { settingsStore.setDisplayToman(v) } }
-    fun setLock(s: AppLockSettings) { viewModelScope.launch { settingsStore.setLock(s) } }
-    fun setDefaultAccount(id: String) { viewModelScope.launch { settingsStore.setDefaultAccount(id) } }
+    fun setToman(v: Boolean) { loggedLaunch { settingsStore.setDisplayToman(v) } }
+    fun setLock(s: AppLockSettings) { loggedLaunch { settingsStore.setLock(s) } }
+    fun setDefaultAccount(id: String) { loggedLaunch { settingsStore.setDefaultAccount(id) } }
     fun setFyStart(month: Int, day: Int, confirm: Boolean) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 settingsStore.setFyStart(month, day)
                 ledger.rebuildFiscalYear(month, day, System.currentTimeMillis(), hasTxns = confirm)
@@ -341,18 +366,18 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun monthChart(fyId: String, month: Int) = viewModelScope.launch {
+    fun monthChart(fyId: String, month: Int) = loggedLaunch {
         runCatching { ledger.monthPnL(fyId, month) }.onFailure { report(it) }
     }
 
     suspend fun pnl(fyId: String, month: Int) = ledger.monthPnL(fyId, month)
 
     fun archiveYear(id: String) {
-        viewModelScope.launch { runCatching { archive.archiveClosedYear(id) }.onFailure { report(it) } }
+        loggedLaunch { runCatching { archive.archiveClosedYear(id) }.onFailure { report(it) } }
     }
 
     fun closeCurrentYear() {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 val s = settingsStore.settings.first()
                 ledger.closeCurrentAndStartNext(System.currentTimeMillis(), s.fyStartMonth, s.fyStartDay)
@@ -367,7 +392,7 @@ class AppViewModel @Inject constructor(
         onError: (String) -> Unit = {},
         onDone: () -> Unit = {},
     ) {
-        viewModelScope.launch {
+        loggedLaunch {
             val ui = state.value
             val ledgerAccounts = ui.accounts.filter { it.type != AccountType.PERSON }
             val problem = SettleRules.validate(
@@ -379,29 +404,29 @@ class AppViewModel @Inject constructor(
             )
             if (problem != null) {
                 onError(problem)
-                return@launch
+                return@loggedLaunch
             }
-            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@launch
+            val amount = Money.parseDisplayAmount(amountDisplay, ui.settings.displayToman) ?: return@loggedLaunch
             val other = ComposerRules.resolveLedgerAccountId(
                 ui.settings.defaultAccountId.orEmpty(),
                 ledgerAccounts,
-            ) ?: return@launch
+            ) ?: return@loggedLaunch
             runCatching {
                 if (theyPay) {
                     ledger.postTransfer(personAccountId, other, amount, null, System.currentTimeMillis(), "")
                 } else {
                     ledger.postTransfer(other, personAccountId, amount, null, System.currentTimeMillis(), "")
                 }
-            }.onSuccess { onDone() }.onFailure { onError(WriteFailures.map(it)) }
+            }.onSuccess { onDone() }.onFailure { onError(mappedFailure("viewmodel", it)) }
         }
     }
 
     fun updateTxn(txn: LedgerTransaction) {
-        viewModelScope.launch { runCatching { ledger.updateTransaction(txn) }.onFailure { report(it) } }
+        loggedLaunch { runCatching { ledger.updateTransaction(txn) }.onFailure { report(it) } }
     }
 
     fun setOpening(accountId: String, amountDisplay: String) {
-        viewModelScope.launch {
+        loggedLaunch {
             runCatching {
                 val s = state.value.settings
                 val amount = Money.parseDisplayAmount(amountDisplay, s.displayToman) ?: 0L

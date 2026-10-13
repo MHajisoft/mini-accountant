@@ -21,6 +21,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.first
 import dagger.hilt.android.AndroidEntryPoint
+import ir.mhajisoft.hesabres.diag.DiagnosticLog
 import ir.mhajisoft.hesabres.domain.crash.BiometricPromptPolicy
 import ir.mhajisoft.hesabres.domain.crash.WriteFailures
 import ir.mhajisoft.hesabres.ui.AppRoot
@@ -107,6 +108,7 @@ class MainActivity : FragmentActivity() {
     ) {
         if (!promptGate.compareAndSet(false, true)) return
         val needsCrypto = crypto != null
+        DiagnosticLog.breadcrumb("biometric", "prompt start crypto=$needsCrypto")
         val authenticators = if (BiometricPromptPolicy.allowsDeviceCredential(Build.VERSION.SDK_INT, needsCrypto)) {
             BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
         } else {
@@ -116,6 +118,7 @@ class MainActivity : FragmentActivity() {
             .getOrDefault(BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE)
         if (can != BiometricManager.BIOMETRIC_SUCCESS) {
             promptGate.set(false)
+            DiagnosticLog.breadcrumb("biometric", "unavailable code=$can")
             onError?.invoke(can) ?: onCancel()
             return
         }
@@ -124,6 +127,7 @@ class MainActivity : FragmentActivity() {
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 release()
+                DiagnosticLog.breadcrumb("biometric", "success")
                 onSuccess(result)
             }
 
@@ -133,8 +137,10 @@ class MainActivity : FragmentActivity() {
                     errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
                     errorCode == BiometricPrompt.ERROR_CANCELED
                 ) {
+                    DiagnosticLog.breadcrumb("biometric", "cancel code=$errorCode")
                     onCancel()
                 } else {
+                    DiagnosticLog.breadcrumb("biometric", "error code=$errorCode")
                     onError?.invoke(errorCode) ?: onCancel()
                 }
             }
@@ -157,9 +163,11 @@ class MainActivity : FragmentActivity() {
             if (crypto != null) prompt.authenticate(info, crypto) else prompt.authenticate(info)
         } catch (t: IllegalArgumentException) {
             release()
+            DiagnosticLog.recordCaught("biometric", t)
             onError?.invoke(BiometricPrompt.ERROR_HW_NOT_PRESENT) ?: onCancel()
         } catch (t: IllegalStateException) {
             release()
+            DiagnosticLog.recordCaught("biometric", t)
             onError?.invoke(BiometricPrompt.ERROR_HW_NOT_PRESENT) ?: onCancel()
         }
     }
