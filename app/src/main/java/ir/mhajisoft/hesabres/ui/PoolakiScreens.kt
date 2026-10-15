@@ -107,6 +107,7 @@ fun HomeDashboard(
     onSearch: () -> Unit,
     onLedgers: () -> Unit,
     onBackup: () -> Unit,
+    onSettings: () -> Unit,
     onAddNote: (JalaliYmd) -> Unit,
     onAddCheque: (JalaliYmd) -> Unit,
     onAddInstallment: (JalaliYmd) -> Unit,
@@ -144,6 +145,11 @@ fun HomeDashboard(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+                HeaderIconButton(
+                    SymbolIcons.Settings,
+                    onSettings,
+                    contentDescription = stringResource(R.string.settings),
                 )
                 HeaderIconButton(SymbolIcons.byKey("search").let { SymbolIcons.Category }, onSearch)
             }
@@ -257,6 +263,7 @@ private fun HeaderIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
     tinted: Boolean = false,
+    contentDescription: String? = null,
 ) {
     Box(
         Modifier
@@ -266,7 +273,7 @@ private fun HeaderIconButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (tinted) PoolakiIndigo else Color.White)
+        Icon(icon, contentDescription, tint = if (tinted) PoolakiIndigo else Color.White)
     }
 }
 
@@ -722,6 +729,24 @@ fun PlannerHub(
                 txnCount, notes.size, ledgerCount,
                 onOpenTxns, onOpenNotes, onOpenPeople, onOpenLedgers, onOpenCheques, onOpenInstallments,
             )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White)
+                    .clickable(onClick = onSettings)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(SymbolIcons.Settings, stringResource(R.string.settings), tint = PoolakiIndigo)
+                Text(
+                    stringResource(R.string.tab_more),
+                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.Bold,
+                )
+                Icon(SymbolIcons.Chevron, null, tint = PoolakiMuted)
+            }
         }
         Column(Modifier.padding(16.dp)) {
             FinanceCard {

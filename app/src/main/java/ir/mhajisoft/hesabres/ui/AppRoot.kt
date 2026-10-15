@@ -85,6 +85,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import ir.mhajisoft.hesabres.BuildConfig
 import ir.mhajisoft.hesabres.MainActivity
 import ir.mhajisoft.hesabres.R
 import ir.mhajisoft.hesabres.data.repository.AccountBalance
@@ -167,6 +168,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteLock : NavKey
 @Serializable data object RouteSettings : NavKey
 @Serializable data object RouteDiagnostics : NavKey
+@Serializable data object RouteAbout : NavKey
 @Serializable data class RouteFiltered(
     val categoryId: String? = null,
     val accountId: String? = null,
@@ -325,6 +327,7 @@ fun AppRoot(
                         onSearch = { backStack.add(RouteTxns) },
                         onLedgers = { backStack.add(RouteAssets) },
                         onBackup = { backStack.add(RouteBackup) },
+                        onSettings = { backStack.add(RouteMore) },
                         onAddNote = { ymd -> backStack.add(RouteNoteForm(ymd.year, ymd.month, ymd.day)) },
                         onAddCheque = { ymd -> backStack.add(RouteChequeForm(ymd.year, ymd.month, ymd.day)) },
                         onAddInstallment = { ymd -> backStack.add(RouteInstallmentForm(ymd.year, ymd.month, ymd.day)) },
@@ -448,7 +451,11 @@ fun AppRoot(
                         vm.saveInstallment(plan, onError = { notify(it) }, onOk = { popRoute(backStack) })
                     }
                 }
-                entry<RouteMore> { MoreScreen { backStack.add(it) } }
+                entry<RouteMore> {
+                    SubScreenScaffold(stringResource(R.string.tab_more), { popRoute(backStack) }) {
+                        MoreScreen { backStack.add(it) }
+                    }
+                }
                 entry<RouteAccounts> { AccountsScreen(state, vm) }
                 entry<RoutePeople> {
                     PeopleScreen(
@@ -506,6 +513,11 @@ fun AppRoot(
                 entry<RouteLock> { LockSettingsScreen(state, vm) }
                 entry<RouteSettings> { SettingsScreen(state, vm) }
                 entry<RouteDiagnostics> { DiagnosticsScreen() }
+                entry<RouteAbout> {
+                    SubScreenScaffold(stringResource(R.string.about), { popRoute(backStack) }) {
+                        AboutScreen()
+                    }
+                }
                 entry<RouteFiltered> { key ->
                     GroupedTxnList(
                         state,
@@ -631,6 +643,7 @@ fun HomeScreen(
     onSearch: () -> Unit = {},
     onLedgers: () -> Unit = {},
     onBackup: () -> Unit = {},
+    onSettings: () -> Unit = {},
     onAddNote: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
     onAddCheque: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
     onAddInstallment: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
@@ -650,6 +663,7 @@ fun HomeScreen(
         onSearch = onSearch,
         onLedgers = onLedgers,
         onBackup = onBackup,
+        onSettings = onSettings,
         onAddNote = onAddNote,
         onAddCheque = onAddCheque,
         onAddInstallment = onAddInstallment,
@@ -790,16 +804,17 @@ fun ReportScreen(
 @Composable
 fun MoreScreen(open: (NavKey) -> Unit) {
     val items = listOf(
+        Triple(R.string.settings, RouteSettings, SymbolIcons.Settings),
+        Triple(R.string.backup, RouteBackup, SymbolIcons.Receipt),
+        Triple(R.string.lock, RouteLock, SymbolIcons.Lock),
+        Triple(R.string.fiscal_year, RouteFiscal, SymbolIcons.Chart),
+        Triple(R.string.archive, RouteArchive, SymbolIcons.Archive),
+        Triple(R.string.vault, RouteVault, SymbolIcons.Card),
+        Triple(R.string.crash_reports, RouteDiagnostics, SymbolIcons.Report),
+        Triple(R.string.about, RouteAbout, SymbolIcons.Report),
         Triple(R.string.accounts, RouteAccounts, SymbolIcons.Wallet),
         Triple(R.string.people, RoutePeople, SymbolIcons.People),
         Triple(R.string.categories, RouteCategories, SymbolIcons.Category),
-        Triple(R.string.vault, RouteVault, SymbolIcons.Card),
-        Triple(R.string.fiscal_year, RouteFiscal, SymbolIcons.Chart),
-        Triple(R.string.archive, RouteArchive, SymbolIcons.Archive),
-        Triple(R.string.backup, RouteBackup, SymbolIcons.Receipt),
-        Triple(R.string.lock, RouteLock, SymbolIcons.Lock),
-        Triple(R.string.settings, RouteSettings, SymbolIcons.Settings),
-        Triple(R.string.crash_reports, RouteDiagnostics, SymbolIcons.Report),
     )
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -1536,6 +1551,27 @@ fun LockSettingsScreen(state: AppUiState, vm: AppViewModel) {
                 lock.timeoutSec.toFloat(),
                 { vm.setLock(lock.copy(timeoutSec = it.toInt().coerceIn(0, 300))) },
                 valueRange = 0f..300f,
+            )
+        }
+    }
+}
+
+@Composable
+fun AboutScreen() {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BrandLockup(showTagline = true)
+        FinanceCard {
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(
+                    R.string.about_version,
+                    PersianDigits.toPersian(BuildConfig.VERSION_NAME),
+                    PersianDigits.toPersian(BuildConfig.VERSION_CODE.toString()),
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
