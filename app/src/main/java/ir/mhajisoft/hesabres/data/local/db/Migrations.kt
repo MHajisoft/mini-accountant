@@ -75,3 +75,78 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         }
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        DiagnosticLog.breadcrumb("db", "migration 3 to 4 start")
+        try {
+            connection.execSQL("ALTER TABLE people ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS notes (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    body TEXT NOT NULL,
+                    jalaliYear INTEGER NOT NULL,
+                    jalaliMonth INTEGER NOT NULL,
+                    jalaliDay INTEGER NOT NULL,
+                    occurredAt INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS cheques (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    side TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    counterparty TEXT NOT NULL,
+                    personId TEXT,
+                    jalaliYear INTEGER NOT NULL,
+                    jalaliMonth INTEGER NOT NULL,
+                    jalaliDay INTEGER NOT NULL,
+                    dueAt INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS installments (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    side TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    totalAmount INTEGER NOT NULL,
+                    installmentAmount INTEGER NOT NULL,
+                    count INTEGER NOT NULL,
+                    paidCount INTEGER NOT NULL,
+                    counterparty TEXT NOT NULL,
+                    personId TEXT,
+                    jalaliYear INTEGER NOT NULL,
+                    jalaliMonth INTEGER NOT NULL,
+                    jalaliDay INTEGER NOT NULL,
+                    nextDueAt INTEGER NOT NULL,
+                    note TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS month_budgets (
+                    jalaliYear INTEGER NOT NULL,
+                    jalaliMonth INTEGER NOT NULL,
+                    limitRials INTEGER NOT NULL,
+                    PRIMARY KEY(jalaliYear, jalaliMonth)
+                )
+                """.trimIndent(),
+            )
+            DiagnosticLog.breadcrumb("db", "migration 3 to 4 done")
+        } catch (t: Throwable) {
+            DiagnosticLog.recordCaught("db.migration.3to4", t)
+            throw t
+        }
+    }
+}

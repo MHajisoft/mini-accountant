@@ -89,7 +89,7 @@ class LedgerRepository @Inject constructor(
         txns.observeRecent(20),
         fiscalYears.observeCurrent(),
     ) { list, fy ->
-        DomainLists.safeMap(list.filter { fy == null || it.fiscalYearId == fy.id }.take(5)) { it.toDomain() }
+        DomainLists.safeMap(list.filter { fy == null || it.fiscalYearId == fy.id }.take(8)) { it.toDomain() }
     }
     val allTxnsFlow: Flow<List<LedgerTransaction>> =
         txns.observeAll().map { list -> DomainLists.safeMap(list) { it.toDomain() } }
@@ -242,6 +242,21 @@ class LedgerRepository @Inject constructor(
 
     suspend fun currentFiscalYear(): FiscalYear? = fiscalYears.getCurrent()?.let { row ->
         DomainLists.safeMap(listOf(row)) { it.toDomain() }.firstOrNull()
+    }
+
+    suspend fun reorderAccounts(orderedIds: List<String>) = gated {
+        val now = System.currentTimeMillis()
+        orderedIds.forEachIndexed { index, id ->
+            val row = accounts.get(id) ?: return@forEachIndexed
+            accounts.update(row.copy(sortOrder = index, updatedAt = now))
+        }
+    }
+
+    suspend fun reorderPeople(orderedIds: List<String>) = gated {
+        orderedIds.forEachIndexed { index, id ->
+            val row = people.get(id) ?: return@forEachIndexed
+            people.upsert(row.copy(sortOrder = index))
+        }
     }
 
     suspend fun upsertAccount(account: Account) = accounts.upsert(account.toEntity())

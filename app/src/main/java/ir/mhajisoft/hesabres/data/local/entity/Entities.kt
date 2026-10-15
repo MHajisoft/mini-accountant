@@ -122,6 +122,7 @@ data class PersonEntity(
     val telegram: String? = null,
     val whatsapp: String? = null,
     val avatarColor: Long = 0xFF0F766E,
+    val sortOrder: Int = 0,
 )
 
 @Entity(
@@ -220,6 +221,62 @@ data class BackupMetadataEntity(
     val schemaVersion: Int,
     val includesSecrets: Boolean,
     val createdAt: Long,
+)
+
+@Entity(tableName = "notes")
+data class NoteEntity(
+    @PrimaryKey val id: String,
+    val body: String,
+    val jalaliYear: Int,
+    val jalaliMonth: Int,
+    val jalaliDay: Int,
+    val occurredAt: Long,
+    val createdAt: Long,
+)
+
+@Entity(tableName = "cheques")
+data class ChequeEntity(
+    @PrimaryKey val id: String,
+    val side: String,
+    val amount: Long,
+    val counterparty: String,
+    val personId: String?,
+    val jalaliYear: Int,
+    val jalaliMonth: Int,
+    val jalaliDay: Int,
+    val dueAt: Long,
+    val status: String,
+    val note: String,
+    val createdAt: Long,
+)
+
+@Entity(tableName = "installments")
+data class InstallmentEntity(
+    @PrimaryKey val id: String,
+    val side: String,
+    val title: String,
+    val totalAmount: Long,
+    val installmentAmount: Long,
+    val count: Int,
+    val paidCount: Int,
+    val counterparty: String,
+    val personId: String?,
+    val jalaliYear: Int,
+    val jalaliMonth: Int,
+    val jalaliDay: Int,
+    val nextDueAt: Long,
+    val note: String,
+    val createdAt: Long,
+)
+
+@Entity(
+    tableName = "month_budgets",
+    primaryKeys = ["jalaliYear", "jalaliMonth"],
+)
+data class MonthBudgetEntity(
+    val jalaliYear: Int,
+    val jalaliMonth: Int,
+    val limitRials: Long,
 )
 
 @Entity(

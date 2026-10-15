@@ -68,12 +68,12 @@ fun FinanceCard(
 ) {
     OutlinedCard(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(0.dp, Color.Transparent),
         colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
-        elevation = CardDefaults.outlinedCardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.outlinedCardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             Modifier.padding(contentPadding),
@@ -366,7 +366,7 @@ fun PrimaryWideButton(text: String, onClick: () -> Unit, enabled: Boolean = true
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        shape = MaterialTheme.shapes.small,
+        shape = RoundedCornerShape(50),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 2.dp),
         colors = ButtonDefaults.buttonColors(

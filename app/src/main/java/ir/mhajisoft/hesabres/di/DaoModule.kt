@@ -14,6 +14,7 @@ import ir.mhajisoft.hesabres.data.local.dao.FiscalYearDao
 import ir.mhajisoft.hesabres.data.local.dao.LedgerWriteDao
 import ir.mhajisoft.hesabres.data.local.dao.OpeningBalanceDao
 import ir.mhajisoft.hesabres.data.local.dao.PersonDao
+import ir.mhajisoft.hesabres.data.local.dao.PlannerDao
 import ir.mhajisoft.hesabres.data.local.dao.SecretBlobDao
 import ir.mhajisoft.hesabres.data.local.dao.SnapshotDao
 import ir.mhajisoft.hesabres.data.local.dao.TransactionDao
@@ -39,4 +40,5 @@ object DaoModule {
     @Provides @Singleton fun backups(db: MiniAccountantDatabase): BackupMetadataDao = db.backups()
     @Provides @Singleton fun secrets(db: MiniAccountantDatabase): SecretBlobDao = db.secrets()
     @Provides @Singleton fun writes(db: MiniAccountantDatabase): LedgerWriteDao = db.ledgerWrite()
+    @Provides @Singleton fun planner(db: MiniAccountantDatabase): PlannerDao = db.planner()
 }

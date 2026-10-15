@@ -11,6 +11,7 @@ import dagger.hilt.components.SingletonComponent
 import ir.mhajisoft.hesabres.data.local.db.MiniAccountantDatabase
 import ir.mhajisoft.hesabres.data.local.db.MIGRATION_1_2
 import ir.mhajisoft.hesabres.data.local.db.MIGRATION_2_3
+import ir.mhajisoft.hesabres.data.local.db.MIGRATION_3_4
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
 import javax.inject.Singleton
@@ -32,7 +33,7 @@ object DatabaseModule {
             MiniAccountantDatabase::class.java,
             file.absolutePath,
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .setDriver(BundledSQLiteDriver())
             // BundledSQLiteDriver uses one connection. Dispatchers.IO resumes a
             // @Transaction on a different thread and throws IllegalStateException.

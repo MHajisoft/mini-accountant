@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -38,6 +37,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -84,17 +85,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.compose.cartesian.data.columnSeries
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.pie.PieChartHost
-import com.patrykandpatrick.vico.compose.pie.data.PieChartModelProducer
-import com.patrykandpatrick.vico.compose.pie.data.pieSeries
-import com.patrykandpatrick.vico.compose.pie.rememberPieChart
 import ir.mhajisoft.hesabres.MainActivity
 import ir.mhajisoft.hesabres.R
 import ir.mhajisoft.hesabres.data.repository.AccountBalance
@@ -151,7 +141,17 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteHome : NavKey
 @Serializable data object RouteTxns : NavKey
 @Serializable data object RouteReports : NavKey
+@Serializable data object RoutePlanner : NavKey
+@Serializable data object RouteBudget : NavKey
+@Serializable data object RouteAssets : NavKey
 @Serializable data object RouteMore : NavKey
+@Serializable data object RouteNotes : NavKey
+@Serializable data object RouteCheques : NavKey
+@Serializable data object RouteInstallments : NavKey
+@Serializable data object RouteCounterparties : NavKey
+@Serializable data class RouteNoteForm(val year: Int, val month: Int, val day: Int) : NavKey
+@Serializable data class RouteChequeForm(val year: Int, val month: Int, val day: Int) : NavKey
+@Serializable data class RouteInstallmentForm(val year: Int, val month: Int, val day: Int) : NavKey
 @Serializable data object RouteAccounts : NavKey
 @Serializable data object RoutePeople : NavKey
 @Serializable data class RoutePerson(val personId: String) : NavKey
@@ -167,7 +167,12 @@ import kotlinx.serialization.Serializable
 @Serializable data object RouteLock : NavKey
 @Serializable data object RouteSettings : NavKey
 @Serializable data object RouteDiagnostics : NavKey
-@Serializable data class RouteFiltered(val categoryId: String? = null, val accountId: String? = null) : NavKey
+@Serializable data class RouteFiltered(
+    val categoryId: String? = null,
+    val accountId: String? = null,
+    val year: Int? = null,
+    val month: Int? = null,
+) : NavKey
 @Serializable data class RouteArchiveViewer(val fileName: String) : NavKey
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -196,6 +201,12 @@ fun AppRoot(
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
+    val notes by vm.planner.notes.collectAsStateWithLifecycle(emptyList())
+    val cheques by vm.planner.cheques.collectAsStateWithLifecycle(emptyList())
+    val installments by vm.planner.installments.collectAsStateWithLifecycle(emptyList())
+    val budgets by vm.planner.budgets.collectAsStateWithLifecycle(emptyList())
+    val backups by vm.backupRepo.metadata.collectAsStateWithLifecycle(emptyList())
+    val lastBackupAt = backups.maxOfOrNull { it.createdAt }
     fun notify(msg: String) { scope.launch { snack.showSnackbar(msg) } }
     LaunchedEffect(Unit) {
         vm.messages.collect { notify(it) }
@@ -217,32 +228,30 @@ fun AppRoot(
         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    val navStroke = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
             val current = backStack.lastOrNull()
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                tonalElevation = 3.dp,
-                modifier = Modifier.drawBehind {
-                    drawLine(navStroke, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
-                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
             ) {
                 NavigationBarItem(
-                    selected = current is RouteHome,
-                    onClick = { rewind(backStack, RouteHome) },
-                    icon = { Icon(SymbolIcons.Home, null) },
-                    label = { Text(stringResource(R.string.tab_home), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    selected = current is RoutePlanner,
+                    onClick = { rewind(backStack, RoutePlanner) },
+                    icon = { Icon(SymbolIcons.byKey("menu_book"), null) },
+                    label = { Text(stringResource(R.string.tab_planner), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = navColors,
+                    alwaysShowLabel = true,
                 )
                 NavigationBarItem(
-                    selected = current is RouteTxns,
-                    onClick = { rewind(backStack, RouteTxns) },
-                    icon = { Icon(SymbolIcons.Receipt, null) },
-                    label = { Text(stringResource(R.string.tab_txns), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    selected = current is RouteBudget,
+                    onClick = { rewind(backStack, RouteBudget) },
+                    icon = { Icon(SymbolIcons.Wallet, null) },
+                    label = { Text(stringResource(R.string.tab_budget), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = navColors,
+                    alwaysShowLabel = true,
                 )
                 NavigationBarItem(
                     selected = current is RouteReports,
@@ -250,32 +259,53 @@ fun AppRoot(
                     icon = { Icon(SymbolIcons.Chart, null) },
                     label = { Text(stringResource(R.string.tab_reports), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = navColors,
+                    alwaysShowLabel = true,
                 )
                 NavigationBarItem(
-                    selected = current is RouteMore,
-                    onClick = { rewind(backStack, RouteMore) },
-                    icon = { Icon(SymbolIcons.More, null) },
-                    label = { Text(stringResource(R.string.tab_more), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    selected = current is RouteAssets,
+                    onClick = { rewind(backStack, RouteAssets) },
+                    icon = { Icon(SymbolIcons.byKey("account_balance"), null) },
+                    label = { Text(stringResource(R.string.tab_assets), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = navColors,
+                    alwaysShowLabel = true,
+                )
+                NavigationBarItem(
+                    selected = current is RouteHome,
+                    onClick = { rewind(backStack, RouteHome) },
+                    icon = { Icon(SymbolIcons.Home, null) },
+                    label = { Text(stringResource(R.string.tab_home), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    colors = navColors,
+                    alwaysShowLabel = true,
                 )
             }
         },
         floatingActionButton = {
             val current = backStack.lastOrNull()
-            if (current is RouteHome || current is RouteTxns) {
-                Surface(
-                    shape = FloatingActionButtonDefaults.shape,
-                    color = MaterialTheme.colorScheme.primary,
+            val today = vm.jalaliToday
+            val fab: (() -> Unit)? = when (current) {
+                is RouteHome, is RouteReports, is RouteTxns, is RouteAssets -> {
+                    { composerMode = 0; showComposer = true }
+                }
+                is RouteCheques -> {
+                    { backStack.add(RouteChequeForm(today.year, today.month, today.day)) }
+                }
+                is RouteInstallments -> {
+                    { backStack.add(RouteInstallmentForm(today.year, today.month, today.day)) }
+                }
+                is RouteNotes -> {
+                    { backStack.add(RouteNoteForm(today.year, today.month, today.day)) }
+                }
+                else -> null
+            }
+            if (fab != null) {
+                FloatingActionButton(
+                    onClick = fab,
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier.size(56.dp).combinedClickable(
-                        onClick = { composerMode = 0; showComposer = true },
-                        onLongClick = { composerMode = 2; showComposer = true },
-                    ),
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
                 ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(SymbolIcons.Add, stringResource(R.string.add_expense))
-                    }
+                    Icon(SymbolIcons.Add, stringResource(R.string.add_expense))
                 }
             }
         },
@@ -291,17 +321,132 @@ fun AppRoot(
                         onChip = { id -> backStack.add(RouteFiltered(accountId = id)) },
                         onDelete = vm::deleteTxnOrTransfer,
                         onEdit = vm::updateTxn,
+                        onOpenAll = { backStack.add(RouteTxns) },
+                        onSearch = { backStack.add(RouteTxns) },
+                        onLedgers = { backStack.add(RouteAssets) },
+                        onBackup = { backStack.add(RouteBackup) },
+                        onAddNote = { ymd -> backStack.add(RouteNoteForm(ymd.year, ymd.month, ymd.day)) },
+                        onAddCheque = { ymd -> backStack.add(RouteChequeForm(ymd.year, ymd.month, ymd.day)) },
+                        onAddInstallment = { ymd -> backStack.add(RouteInstallmentForm(ymd.year, ymd.month, ymd.day)) },
+                        notes = notes,
+                        cheques = cheques,
+                        installments = installments,
+                        lastBackupAt = lastBackupAt,
                     )
                 }
                 entry<RouteTxns> {
-                    TxnListScreen(
+                    GroupedTxnList(
                         state,
-                        onDelete = vm::deleteTxnOrTransfer,
+                        initialYear = null,
+                        initialMonth = null,
+                        initialAccountId = null,
+                        initialCategoryId = null,
                         onEdit = vm::updateTxn,
+                        onDelete = vm::deleteTxnOrTransfer,
                     )
                 }
                 entry<RouteReports> {
-                    ReportScreen(state) { catId -> backStack.add(RouteFiltered(catId)) }
+                    ReportScreen(state) { categoryId, accountId, year, month ->
+                        backStack.add(RouteFiltered(categoryId, accountId, year, month))
+                    }
+                }
+                entry<RoutePlanner> {
+                    PlannerHub(
+                        state = state,
+                        notes = notes,
+                        cheques = cheques,
+                        installments = installments,
+                        onOpenTxns = { backStack.add(RouteTxns) },
+                        onOpenNotes = { backStack.add(RouteNotes) },
+                        onOpenPeople = { backStack.add(RouteCounterparties) },
+                        onOpenLedgers = { backStack.add(RouteAssets) },
+                        onOpenCheques = { backStack.add(RouteCheques) },
+                        onOpenInstallments = { backStack.add(RouteInstallments) },
+                        onSettings = { backStack.add(RouteMore) },
+                        onSearch = { backStack.add(RouteTxns) },
+                        onAddNote = { ymd -> backStack.add(RouteNoteForm(ymd.year, ymd.month, ymd.day)) },
+                        onAddCheque = { ymd -> backStack.add(RouteChequeForm(ymd.year, ymd.month, ymd.day)) },
+                        onAddInstallment = { ymd -> backStack.add(RouteInstallmentForm(ymd.year, ymd.month, ymd.day)) },
+                    )
+                }
+                entry<RouteBudget> {
+                    BudgetScreen(state, budgets) { year, month, limit -> vm.saveBudget(year, month, limit) }
+                }
+                entry<RouteAssets> {
+                    LedgerBoard(
+                        state,
+                        onOpen = { backStack.add(RouteFiltered(accountId = it)) },
+                        onAdd = { backStack.add(RouteAccounts) },
+                        onReorder = vm::reorderAccounts,
+                    )
+                }
+                entry<RouteNotes> {
+                    SubScreenScaffold(stringResource(R.string.notes_title), { popRoute(backStack) }, {
+                        val today = vm.jalaliToday
+                        backStack.add(RouteNoteForm(today.year, today.month, today.day))
+                    }) {
+                        NotesScreen(
+                            notes,
+                            onAdd = { ymd -> backStack.add(RouteNoteForm(ymd.year, ymd.month, ymd.day)) },
+                            onDelete = vm::deleteNote,
+                        )
+                    }
+                }
+                entry<RouteCheques> {
+                    SubScreenScaffold(stringResource(R.string.cheques), { popRoute(backStack) }) {
+                        ChequesScreen(
+                            cheques,
+                            state.settings.displayToman,
+                            onAdd = {
+                                val today = vm.jalaliToday
+                                backStack.add(RouteChequeForm(today.year, today.month, today.day))
+                            },
+                            onSettle = vm::settleCheque,
+                            onDelete = vm::deleteCheque,
+                        )
+                    }
+                }
+                entry<RouteInstallments> {
+                    SubScreenScaffold(stringResource(R.string.installments), { popRoute(backStack) }) {
+                        InstallmentsScreen(
+                            installments,
+                            state.settings.displayToman,
+                            onAdd = {
+                                val today = vm.jalaliToday
+                                backStack.add(RouteInstallmentForm(today.year, today.month, today.day))
+                            },
+                            onPay = vm::payInstallment,
+                            onDelete = vm::deleteInstallment,
+                        )
+                    }
+                }
+                entry<RouteCounterparties> {
+                    SubScreenScaffold(stringResource(R.string.counterparties), { popRoute(backStack) }, { backStack.add(RoutePersonEdit()) }) {
+                        CounterpartyBoard(
+                            state,
+                            onOpen = { backStack.add(RoutePerson(it)) },
+                            onAdd = { backStack.add(RoutePersonEdit()) },
+                            onReorder = vm::reorderPeople,
+                        )
+                    }
+                }
+                entry<RouteNoteForm> { key ->
+                    val ymd = ir.mhajisoft.hesabres.domain.jalali.JalaliYmd(key.year, key.month, key.day)
+                    NoteForm(ymd) { body, day ->
+                        vm.saveNote(body, day, onError = { notify(it) }, onOk = { popRoute(backStack) })
+                    }
+                }
+                entry<RouteChequeForm> { key ->
+                    val ymd = ir.mhajisoft.hesabres.domain.jalali.JalaliYmd(key.year, key.month, key.day)
+                    ChequeForm(ymd, state.settings.displayToman) { cheque ->
+                        vm.saveCheque(cheque, onError = { notify(it) }, onOk = { popRoute(backStack) })
+                    }
+                }
+                entry<RouteInstallmentForm> { key ->
+                    val ymd = ir.mhajisoft.hesabres.domain.jalali.JalaliYmd(key.year, key.month, key.day)
+                    InstallmentForm(ymd, state.settings.displayToman) { plan ->
+                        vm.saveInstallment(plan, onError = { notify(it) }, onOk = { popRoute(backStack) })
+                    }
                 }
                 entry<RouteMore> { MoreScreen { backStack.add(it) } }
                 entry<RouteAccounts> { AccountsScreen(state, vm) }
@@ -362,15 +507,14 @@ fun AppRoot(
                 entry<RouteSettings> { SettingsScreen(state, vm) }
                 entry<RouteDiagnostics> { DiagnosticsScreen() }
                 entry<RouteFiltered> { key ->
-                    TxnListScreen(
-                        state.copy(
-                            txns = state.txns.filter {
-                                (key.categoryId == null || it.categoryId == key.categoryId) &&
-                                    (key.accountId == null || it.accountId == key.accountId)
-                            },
-                        ),
-                        onDelete = vm::deleteTxnOrTransfer,
+                    GroupedTxnList(
+                        state,
+                        initialYear = key.year,
+                        initialMonth = key.month,
+                        initialAccountId = key.accountId,
+                        initialCategoryId = key.categoryId,
                         onEdit = vm::updateTxn,
+                        onDelete = vm::deleteTxnOrTransfer,
                     )
                 }
             },
@@ -483,91 +627,36 @@ fun HomeScreen(
     onChip: (String) -> Unit,
     onDelete: (LedgerTransaction) -> Unit,
     onEdit: (LedgerTransaction) -> Unit,
+    onOpenAll: () -> Unit = {},
+    onSearch: () -> Unit = {},
+    onLedgers: () -> Unit = {},
+    onBackup: () -> Unit = {},
+    onAddNote: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
+    onAddCheque: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
+    onAddInstallment: (ir.mhajisoft.hesabres.domain.jalali.JalaliYmd) -> Unit = {},
+    notes: List<ir.mhajisoft.hesabres.domain.planner.Note> = emptyList(),
+    cheques: List<ir.mhajisoft.hesabres.domain.planner.Cheque> = emptyList(),
+    installments: List<ir.mhajisoft.hesabres.domain.planner.InstallmentPlan> = emptyList(),
+    lastBackupAt: Long? = null,
 ) {
-    val toman = state.settings.displayToman
-    var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
-    var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
-    val today = remember { JalaliConverter.fromEpochMillis(System.currentTimeMillis()) }
-    val monthRows = state.txns.filter {
-        it.jalaliYear == today.year &&
-            it.jalaliMonth == today.month &&
-            it.transferId == null &&
-            it.categoryId != SystemCategories.OPENING_BALANCE_ID
-    }
-    val monthIncome = monthRows.filter { it.direction == Direction.IN }.sumOf { it.amount }
-    val monthExpense = monthRows.filter { it.direction == Direction.OUT }.sumOf { it.amount }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { BrandTopBarLogo() }
-        item {
-            BalanceHero(
-                label = stringResource(R.string.total_balance),
-                amount = formatMoney(state.total, toman),
-                incomeLabel = stringResource(R.string.income),
-                income = formatMoney(monthIncome, toman),
-                expenseLabel = stringResource(R.string.expense),
-                expense = formatMoney(monthExpense, toman),
-            )
-        }
-        item {
-            FinanceCard {
-                SectionLabel(stringResource(R.string.accounts))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    state.balances.filter { it.account.type != AccountType.PERSON }.forEach { ab ->
-                        ChoiceChip(
-                            selected = false,
-                            onClick = { onChip(ab.account.id) },
-                            label = "${ab.account.name} ${formatMoney(ab.balanceSigned, toman)}",
-                        )
-                    }
-                }
-            }
-        }
-        item { SectionLabel(stringResource(R.string.recent_txns)) }
-        if (state.recent.isEmpty()) {
-            item {
-                FinanceEmptyState(
-                    SymbolIcons.Receipt,
-                    stringResource(R.string.empty_home_title),
-                    stringResource(R.string.empty_home),
-                )
-            }
-        } else {
-            items(state.recent, key = { it.id }) { txn ->
-                TxnRow(txn, state, onClick = {
-                    if (txn.transferId == null) editing = txn
-                }, onLongClick = { pendingDelete = txn })
-            }
-        }
-    }
-    editing?.let { txn ->
-        EditTxnDialog(
-            txn = txn,
-            toman = state.settings.displayToman,
-            onDismiss = { editing = null },
-            onSave = { updated ->
-                onEdit(updated)
-                editing = null
-            },
-        )
-    }
-    pendingDelete?.let { txn ->
-        ConfirmDeleteDialog(
-            txn = txn,
-            onDismiss = { pendingDelete = null },
-            onConfirm = {
-                onDelete(txn)
-                pendingDelete = null
-            },
-        )
-    }
+    HomeDashboard(
+        state = state,
+        notes = notes,
+        cheques = cheques,
+        installments = installments,
+        lastBackupAt = lastBackupAt,
+        onAccount = onChip,
+        onOpenAll = onOpenAll,
+        onSearch = onSearch,
+        onLedgers = onLedgers,
+        onBackup = onBackup,
+        onAddNote = onAddNote,
+        onAddCheque = onAddCheque,
+        onAddInstallment = onAddInstallment,
+        onEdit = onEdit,
+    )
 }
+
 
 @Composable
 fun TxnRow(txn: LedgerTransaction, state: AppUiState, onClick: () -> Unit, onLongClick: () -> Unit = {}) {
@@ -620,104 +709,9 @@ fun TxnListScreen(
     onDelete: (LedgerTransaction) -> Unit,
     onEdit: (LedgerTransaction) -> Unit = {},
 ) {
-    var q by remember { mutableStateOf("") }
-    var accountFilter by remember { mutableStateOf<String?>(null) }
-    var categoryFilter by remember { mutableStateOf<String?>(null) }
-    var editing by remember { mutableStateOf<LedgerTransaction?>(null) }
-    var pendingDelete by remember { mutableStateOf<LedgerTransaction?>(null) }
-    val needle = PersianDigits.toAscii(q).lowercase()
-    val grouped = state.txns
-        .filter { txn ->
-            if (needle.isBlank()) return@filter true
-            val cat = state.categories.firstOrNull { it.id == txn.categoryId }?.name.orEmpty()
-            val acc = state.accounts.firstOrNull { it.id == txn.accountId }?.name.orEmpty()
-            txn.note.contains(q) ||
-                cat.contains(q) ||
-                acc.contains(q) ||
-                txn.id.contains(needle) ||
-                PersianDigits.toAscii(txn.note).contains(needle)
-        }
-        .filter { accountFilter == null || it.accountId == accountFilter }
-        .filter { categoryFilter == null || it.categoryId == categoryFilter }
-        .groupBy { Triple(it.jalaliYear, it.jalaliMonth, it.jalaliDay) }
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            ScreenHeader(stringResource(R.string.tab_txns))
-            FinanceTextField(q, { q = it }, label = stringResource(R.string.search))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ChoiceChip(accountFilter == null, { accountFilter = null }, stringResource(R.string.all))
-                state.accounts.filter { it.type != AccountType.PERSON && !it.archived }.take(6).forEach { acc ->
-                    ChoiceChip(accountFilter == acc.id, { accountFilter = acc.id }, acc.name)
-                }
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ChoiceChip(categoryFilter == null, { categoryFilter = null }, stringResource(R.string.filter))
-                state.categories.filter { !it.isSystem || it.kind != CategoryKind.TRANSFER }.take(6).forEach { cat ->
-                    ChoiceChip(categoryFilter == cat.id, { categoryFilter = cat.id }, cat.name)
-                }
-            }
-        }
-        if (grouped.isEmpty()) {
-            Box(Modifier.padding(horizontal = 16.dp)) {
-                FinanceEmptyState(
-                    SymbolIcons.Receipt,
-                    stringResource(R.string.empty_txns_title),
-                    stringResource(R.string.empty_txns),
-                )
-            }
-        } else {
-            LazyColumn(
-                Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                grouped.toSortedMap(compareByDescending<Triple<Int, Int, Int>> { it.first }.thenByDescending { it.second }.thenByDescending { it.third }).forEach { (day, rows) ->
-                    item(key = "day-$day") {
-                        Text(
-                            PersianDigits.toPersian("${day.first}/${day.second.toString().padStart(2, '0')}/${day.third.toString().padStart(2, '0')}"),
-                            Modifier.padding(top = 8.dp, bottom = 2.dp),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    items(rows, key = { it.id }) { txn ->
-                        TxnRow(txn, state, onClick = {
-                            if (txn.transferId == null) editing = txn
-                        }, onLongClick = { pendingDelete = txn })
-                    }
-                }
-            }
-        }
-    }
-    editing?.let { txn ->
-        EditTxnDialog(
-            txn = txn,
-            toman = state.settings.displayToman,
-            onDismiss = { editing = null },
-            onSave = { updated ->
-                onEdit(updated)
-                editing = null
-            },
-        )
-    }
-    pendingDelete?.let { txn ->
-        ConfirmDeleteDialog(
-            txn = txn,
-            onDismiss = { pendingDelete = null },
-            onConfirm = {
-                onDelete(txn)
-                pendingDelete = null
-            },
-        )
-    }
+    GroupedTxnList(state, null, null, null, null, onEdit, onDelete)
 }
+
 
 @Composable
 private fun ConfirmDeleteDialog(
@@ -749,7 +743,7 @@ private fun ConfirmDeleteDialog(
 }
 
 @Composable
-private fun EditTxnDialog(
+internal fun EditTxnDialog(
     txn: LedgerTransaction,
     toman: Boolean,
     onDismiss: () -> Unit,
@@ -785,169 +779,13 @@ private fun EditTxnDialog(
 }
 
 @Composable
-fun ReportScreen(state: AppUiState, onSlice: (String) -> Unit) {
-    val fy = state.fy
-    if (fy == null) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ScreenHeader(stringResource(R.string.tab_reports))
-            FinanceEmptyState(
-                SymbolIcons.Chart,
-                stringResource(R.string.empty_reports_title),
-                stringResource(R.string.empty_reports_body),
-            )
-        }
-        return
-    }
-    var month by remember { mutableIntStateOf(JalaliConverter.fromEpochMillis(System.currentTimeMillis()).month) }
-    var yearMode by remember { mutableStateOf(false) }
-    val rows = state.txns.filter {
-        it.fiscalYearId == fy.id &&
-            (yearMode || it.jalaliMonth == month) &&
-            it.transferId == null &&
-            it.categoryId != SystemCategories.OPENING_BALANCE_ID
-    }
-    val byCat = rows.groupBy { it.categoryId ?: "" }.mapValues { e ->
-        e.value.sumOf { if (it.direction == Direction.OUT) it.amount else 0L }
-    }.filter { it.value > 0L }
-    val maxAmt = byCat.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-    Column(
-        Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        ScreenHeader(stringResource(R.string.tab_reports), PersianDigits.toPersian(fy.label))
-        FinanceCard {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ChoiceChip(!yearMode, { yearMode = false }, stringResource(R.string.month_mode))
-                ChoiceChip(yearMode, { yearMode = true }, stringResource(R.string.year_mode))
-            }
-            if (!yearMode) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("−") }
-                    Text(
-                        "${JalaliLabels.monthName(month)} ${PersianDigits.toPersian(fy.startJalaliYear.toString())}",
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("+") }
-                }
-            } else {
-                Text(PersianDigits.toPersian(fy.label), style = MaterialTheme.typography.titleMedium)
-            }
-        }
-        if (byCat.isEmpty()) {
-            FinanceEmptyState(
-                SymbolIcons.Chart,
-                stringResource(R.string.empty_reports_title),
-                stringResource(R.string.empty_reports_body),
-            )
-        } else {
-            FinanceCard {
-                SectionLabel(stringResource(R.string.pie_by_category))
-                ReportCharts(byCat, rows, yearMode, onSlice)
-            }
-            byCat.forEach { (id, amt) ->
-                val cat = state.categories.firstOrNull { it.id == id }
-                FinanceCard(Modifier.clickable { onSlice(id) }, contentSpacing = 6.dp) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconBadge(
-                            SymbolIcons.byKey(cat?.iconKey ?: "category"),
-                            cat?.let { argbColor(it.color) } ?: MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            cat?.name ?: id,
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            formatMoney(amt, state.settings.displayToman),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = LocalLedgerTones.current.expense,
-                            modifier = Modifier.widthIn(max = 140.dp),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    ShareBar(amt.toFloat() / maxAmt.toFloat())
-                }
-            }
-        }
-    }
+fun ReportScreen(
+    state: AppUiState,
+    onFiltered: (String?, String?, Int, Int) -> Unit,
+) {
+    ReportDashboard(state, onFiltered)
 }
 
-@Composable
-private fun ReportCharts(
-    byCat: Map<String, Long>,
-    rows: List<LedgerTransaction>,
-    yearMode: Boolean,
-    onSlice: (String) -> Unit,
-) {
-    val pieProducer = remember { PieChartModelProducer() }
-    val barProducer = remember { CartesianChartModelProducer() }
-    val catKeys = remember(byCat) { byCat.keys.toList() }
-    var ready by remember { mutableStateOf(false) }
-    LaunchedEffect(byCat, rows, yearMode) {
-        val grouped = if (yearMode) rows.groupBy { it.jalaliMonth } else rows.groupBy { it.jalaliDay }
-        val daily = grouped.toSortedMap().filter { it.value.isNotEmpty() }
-        if (byCat.isEmpty() || daily.isEmpty()) {
-            ready = false
-            return@LaunchedEffect
-        }
-        val plotted = runCatching {
-            pieProducer.runTransaction {
-                pieSeries {
-                    series(byCat.values.map { it.toDouble() })
-                }
-            }
-            barProducer.runTransaction {
-                columnSeries {
-                    series(
-                        daily.keys.map { it.toDouble() },
-                        daily.values.map { v ->
-                            v.filter { it.direction == Direction.OUT }.sumOf { it.amount }.toDouble()
-                        },
-                    )
-                }
-            }
-        }
-        ready = plotted.isSuccess
-    }
-    val pieChart = rememberPieChart()
-    val columnLayer = rememberColumnCartesianLayer()
-    val barChart = rememberCartesianChart(
-        columnLayer,
-        startAxis = VerticalAxis.rememberStart(),
-        bottomAxis = HorizontalAxis.rememberBottom(),
-    )
-    if (!ready) return
-    PieChartHost(
-        chart = pieChart,
-        modelProducer = pieProducer,
-        modifier = Modifier.height(200.dp).fillMaxWidth().clickable {
-            catKeys.firstOrNull()?.let(onSlice)
-        },
-    )
-    Text(stringResource(R.string.daily_bars), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
-    CartesianChartHost(
-        barChart,
-        barProducer,
-        modifier = Modifier.height(180.dp),
-    )
-}
 
 @Composable
 fun MoreScreen(open: (NavKey) -> Unit) {
@@ -1293,15 +1131,6 @@ fun VaultScreen(state: AppUiState, vm: AppViewModel, onSecure: (Boolean) -> Unit
             }
         }
     }
-}
-
-@Composable
-fun BankLogo(drawableName: String) {
-    val ctx = LocalContext.current
-    val id = ctx.resources.getIdentifier(drawableName, "drawable", ctx.packageName)
-    val fallback = ctx.resources.getIdentifier("bank_unknown", "drawable", ctx.packageName)
-    val res = if (id != 0) id else fallback
-    if (res != 0) Image(painterResource(res), null, Modifier.size(40.dp))
 }
 
 @Composable
@@ -1814,7 +1643,7 @@ fun PreviewReports() {
     val dark = androidx.compose.foundation.isSystemInDarkTheme()
     HesabresTheme(darkTheme = dark) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            ReportScreen(previewFinanceState()) {}
+            ReportScreen(previewFinanceState()) { _, _, _, _ -> }
         }
     }
 }

@@ -12,6 +12,7 @@ import ir.mhajisoft.hesabres.data.local.dao.FiscalYearDao
 import ir.mhajisoft.hesabres.data.local.dao.LedgerWriteDao
 import ir.mhajisoft.hesabres.data.local.dao.OpeningBalanceDao
 import ir.mhajisoft.hesabres.data.local.dao.PersonDao
+import ir.mhajisoft.hesabres.data.local.dao.PlannerDao
 import ir.mhajisoft.hesabres.data.local.dao.PersonSocialLinkDao
 import ir.mhajisoft.hesabres.data.local.dao.SecretBlobDao
 import ir.mhajisoft.hesabres.data.local.dao.SnapshotDao
@@ -25,7 +26,11 @@ import ir.mhajisoft.hesabres.data.local.entity.BalanceSnapshotEntity
 import ir.mhajisoft.hesabres.data.local.entity.BankAccountEntity
 import ir.mhajisoft.hesabres.data.local.entity.BankCardEntity
 import ir.mhajisoft.hesabres.data.local.entity.CategoryEntity
+import ir.mhajisoft.hesabres.data.local.entity.ChequeEntity
 import ir.mhajisoft.hesabres.data.local.entity.FiscalYearEntity
+import ir.mhajisoft.hesabres.data.local.entity.InstallmentEntity
+import ir.mhajisoft.hesabres.data.local.entity.MonthBudgetEntity
+import ir.mhajisoft.hesabres.data.local.entity.NoteEntity
 import ir.mhajisoft.hesabres.data.local.entity.PersonEntity
 import ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity
 import ir.mhajisoft.hesabres.data.local.entity.SecretBlobEntity
@@ -48,8 +53,12 @@ import ir.mhajisoft.hesabres.data.local.entity.TransferEntity
         ArchiveEntity::class,
         BackupMetadataEntity::class,
         SecretBlobEntity::class,
+        NoteEntity::class,
+        ChequeEntity::class,
+        InstallmentEntity::class,
+        MonthBudgetEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class MiniAccountantDatabase : RoomDatabase() {
@@ -68,9 +77,10 @@ abstract class MiniAccountantDatabase : RoomDatabase() {
     abstract fun backups(): BackupMetadataDao
     abstract fun secrets(): SecretBlobDao
     abstract fun ledgerWrite(): LedgerWriteDao
+    abstract fun planner(): PlannerDao
 
     companion object {
         const val FILE_NAME = "mini_accountant.db"
-        const val SCHEMA_VERSION = 3
+        const val SCHEMA_VERSION = 4
     }
 }
