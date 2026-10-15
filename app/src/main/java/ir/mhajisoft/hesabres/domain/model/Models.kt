@@ -117,6 +117,7 @@ data class Person(
     val whatsapp: String? = null,
     val avatarColor: Long = 0xFF0F766E,
     val socialLinks: List<SocialLink> = emptyList(),
+    val sortOrder: Int = 0,
 ) {
     val displayName: String
         get() = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ").ifBlank { name }

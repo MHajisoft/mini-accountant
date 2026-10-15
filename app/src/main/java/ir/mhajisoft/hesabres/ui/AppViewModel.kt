@@ -10,9 +10,16 @@ import ir.mhajisoft.hesabres.data.local.datastore.SettingsDataStore
 import ir.mhajisoft.hesabres.data.local.datastore.UserSettings
 import ir.mhajisoft.hesabres.data.repository.AccountBalance
 import ir.mhajisoft.hesabres.data.repository.LedgerRepository
+import ir.mhajisoft.hesabres.data.repository.PlannerRepository
 import ir.mhajisoft.hesabres.data.repository.VaultRepository
 import ir.mhajisoft.hesabres.debug.DebugSeeder
 import ir.mhajisoft.hesabres.domain.jalali.JalaliConverter
+import ir.mhajisoft.hesabres.domain.jalali.JalaliYmd
+import ir.mhajisoft.hesabres.domain.planner.Cheque
+import ir.mhajisoft.hesabres.domain.planner.ChequeStatus
+import ir.mhajisoft.hesabres.domain.planner.InstallmentPlan
+import ir.mhajisoft.hesabres.domain.planner.MonthBudget
+import ir.mhajisoft.hesabres.domain.planner.PlannerRules
 import ir.mhajisoft.hesabres.domain.model.Account
 import ir.mhajisoft.hesabres.domain.model.AccountType
 import ir.mhajisoft.hesabres.domain.model.AppLockSettings
@@ -65,11 +72,13 @@ class AppViewModel @Inject constructor(
     private val backup: BackupRepository,
     private val archive: ArchiveRepository,
     private val seeder: DebugSeeder,
+    private val plannerRepo: PlannerRepository,
 ) : ViewModel() {
     val vaultRepo get() = vault
     val backupRepo get() = backup
     val archiveRepo get() = archive
     val settingsStorePublic get() = settingsStore
+    val planner get() = plannerRepo
 
     val state = combine(
         combine(
@@ -436,6 +445,90 @@ class AppViewModel @Inject constructor(
     }
 
     val jalaliToday get() = JalaliConverter.fromEpochMillis(System.currentTimeMillis())
+
+    fun saveNote(body: String, ymd: JalaliYmd, onError: (String) -> Unit = {}, onOk: () -> Unit = {}) {
+        val problem = PlannerRules.validateNote(body)
+        if (problem != null) {
+            onError(problem)
+            return
+        }
+        loggedLaunch {
+            runCatching { plannerRepo.saveNote(body, ymd) }
+                .onSuccess { onOk() }
+                .onFailure { onError(mappedFailure("note.save", it)) }
+        }
+    }
+
+    fun deleteNote(id: String) {
+        loggedLaunch { runCatching { plannerRepo.deleteNote(id) }.onFailure { report(it) } }
+    }
+
+    fun saveCheque(cheque: Cheque, onError: (String) -> Unit = {}, onOk: () -> Unit = {}) {
+        val problem = PlannerRules.validateCheque(cheque.amount, cheque.counterparty)
+        if (problem != null) {
+            onError(problem)
+            return
+        }
+        loggedLaunch {
+            runCatching { plannerRepo.saveCheque(cheque) }
+                .onSuccess { onOk() }
+                .onFailure { onError(mappedFailure("cheque.save", it)) }
+        }
+    }
+
+    fun settleCheque(cheque: Cheque) {
+        loggedLaunch {
+            runCatching { plannerRepo.saveCheque(cheque.copy(status = ChequeStatus.SETTLED)) }.onFailure { report(it) }
+        }
+    }
+
+    fun deleteCheque(id: String) {
+        loggedLaunch { runCatching { plannerRepo.deleteCheque(id) }.onFailure { report(it) } }
+    }
+
+    fun saveInstallment(plan: InstallmentPlan, onError: (String) -> Unit = {}, onOk: () -> Unit = {}) {
+        val problem = PlannerRules.validateInstallment(
+            plan.title, plan.totalAmount, plan.installmentAmount, plan.count, plan.counterparty,
+        )
+        if (problem != null) {
+            onError(problem)
+            return
+        }
+        loggedLaunch {
+            runCatching { plannerRepo.saveInstallment(plan) }
+                .onSuccess { onOk() }
+                .onFailure { onError(mappedFailure("installment.save", it)) }
+        }
+    }
+
+    fun payInstallment(plan: InstallmentPlan) {
+        loggedLaunch {
+            runCatching { plannerRepo.saveInstallment(PlannerRules.recordPayment(plan)) }.onFailure { report(it) }
+        }
+    }
+
+    fun deleteInstallment(id: String) {
+        loggedLaunch { runCatching { plannerRepo.deleteInstallment(id) }.onFailure { report(it) } }
+    }
+
+    fun saveBudget(year: Int, month: Int, limitRials: Long, onError: (String) -> Unit = {}) {
+        val problem = PlannerRules.validateBudget(limitRials)
+        if (problem != null) {
+            onError(problem)
+            return
+        }
+        loggedLaunch {
+            runCatching { plannerRepo.saveBudget(MonthBudget(year, month, limitRials)) }.onFailure { report(it) }
+        }
+    }
+
+    fun reorderAccounts(ids: List<String>) {
+        loggedLaunch { runCatching { ledger.reorderAccounts(ids) }.onFailure { report(it) } }
+    }
+
+    fun reorderPeople(ids: List<String>) {
+        loggedLaunch { runCatching { ledger.reorderPeople(ids) }.onFailure { report(it) } }
+    }
 
     val openings = ledger.openingsFlow.stateIn(
         viewModelScope,

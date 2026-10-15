@@ -191,7 +191,7 @@ interface TransferDao {
 
 @Dao
 interface PersonDao {
-    @Query("SELECT * FROM people ORDER BY name")
+    @Query("SELECT * FROM people ORDER BY sortOrder, name")
     fun observeAll(): Flow<List<PersonEntity>>
 
     @Query("SELECT * FROM people")

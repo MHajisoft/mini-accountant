@@ -48,6 +48,18 @@ data class LedgerTones(
     val creditor: Color,
 )
 
+val PoolakiIndigo = Color(0xFF5E63B6)
+val PoolakiIndigoDeep = Color(0xFF4A4F9E)
+val PoolakiKeypad = Color(0xFF7B80D6)
+val PoolakiBackground = Color(0xFFEFEFF4)
+val PoolakiPeach = Color(0xFFFBE3C4)
+val PoolakiPeachInk = Color(0xFF8A5A2B)
+val PoolakiNegative = Color(0xFFD9534F)
+val PoolakiMuted = Color(0xFF8A8A8A)
+val PoolakiChip = Color(0xFFECEDFB)
+val PoolakiBarMuted = Color(0xFFE4E4E4)
+val PoolakiInk = Color(0xFF222222)
+
 val BrandBlue = Color(0xFF2563EB)
 val BrandDeepBlue = Color(0xFF1D4ED8)
 val BrandTeal = Color(0xFF10B981)
@@ -67,10 +79,10 @@ val LocalLedgerTones = staticCompositionLocalOf {
 }
 
 private val LightColors = lightColorScheme(
-    primary = BrandBlue,
+    primary = PoolakiIndigo,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDBEAFE),
-    onPrimaryContainer = Color(0xFF1E3A8A),
+    primaryContainer = PoolakiChip,
+    onPrimaryContainer = PoolakiIndigoDeep,
     secondary = BrandTeal,
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFD1FAE5),
@@ -79,12 +91,12 @@ private val LightColors = lightColorScheme(
     onTertiary = Color(0xFF1A2E05),
     tertiaryContainer = Color(0xFFECFCCB),
     onTertiaryContainer = Color(0xFF3F6212),
-    background = BrandSoftBackground,
-    onBackground = Color(0xFF0F172A),
+    background = PoolakiBackground,
+    onBackground = PoolakiInk,
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF0F172A),
+    onSurface = PoolakiInk,
     surfaceVariant = Color(0xFFD6E6F2),
-    onSurfaceVariant = Color(0xFF334155),
+    onSurfaceVariant = PoolakiMuted,
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = Color(0xFFF8FAFC),
     surfaceContainer = Color(0xFFE8F4FC),
@@ -92,7 +104,7 @@ private val LightColors = lightColorScheme(
     surfaceContainerHighest = Color(0xFFC7E0F4),
     outline = Color(0xFF475569),
     outlineVariant = Color(0xFF64748B),
-    error = Color(0xFFB42318),
+    error = PoolakiNegative,
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFEE4E2),
     onErrorContainer = Color(0xFF7A271A),
@@ -102,9 +114,9 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF93C5FD),
-    onPrimary = Color(0xFF0B1F4A),
-    primaryContainer = BrandDeepBlue,
+    primary = Color(0xFFB7BAEA),
+    onPrimary = Color(0xFF1C2048),
+    primaryContainer = Color(0xFF3A3F86),
     onPrimaryContainer = Color(0xFFDBEAFE),
     secondary = Color(0xFF6EE7B7),
     onSecondary = Color(0xFF064E3B),
@@ -139,7 +151,7 @@ private val DarkColors = darkColorScheme(
 private val LightTones = LedgerTones(
     income = Color(0xFF047857),
     onIncome = Color.White,
-    expense = Color(0xFFB91C1C),
+    expense = PoolakiNegative,
     onExpense = Color.White,
     debtor = Color(0xFF9A3412),
     creditor = BrandDeepBlue,

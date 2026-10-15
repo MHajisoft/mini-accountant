@@ -27,11 +27,21 @@ import ir.mhajisoft.hesabres.domain.model.CategoryKind
 import ir.mhajisoft.hesabres.domain.model.Direction
 import ir.mhajisoft.hesabres.domain.model.FiscalYear
 import ir.mhajisoft.hesabres.domain.model.LedgerTransaction
+import ir.mhajisoft.hesabres.domain.model.Transfer
 import ir.mhajisoft.hesabres.data.local.entity.PersonSocialLinkEntity
 import ir.mhajisoft.hesabres.domain.model.Person
 import ir.mhajisoft.hesabres.domain.model.SocialLink
 import ir.mhajisoft.hesabres.domain.people.SocialLinkCatalog
-import ir.mhajisoft.hesabres.domain.model.Transfer
+import ir.mhajisoft.hesabres.data.local.entity.ChequeEntity
+import ir.mhajisoft.hesabres.data.local.entity.InstallmentEntity
+import ir.mhajisoft.hesabres.data.local.entity.MonthBudgetEntity
+import ir.mhajisoft.hesabres.data.local.entity.NoteEntity
+import ir.mhajisoft.hesabres.domain.planner.Cheque
+import ir.mhajisoft.hesabres.domain.planner.ChequeStatus
+import ir.mhajisoft.hesabres.domain.planner.FlowSide
+import ir.mhajisoft.hesabres.domain.planner.InstallmentPlan
+import ir.mhajisoft.hesabres.domain.planner.MonthBudget
+import ir.mhajisoft.hesabres.domain.planner.Note
 
 fun AccountEntity.toDomain() = Account(
     id, name, AccountType.valueOf(type), currency, includeInTotal, archived, color, sortOrder, createdAt, updatedAt,
@@ -80,9 +90,10 @@ fun Transfer.toEntity() = TransferEntity(
 fun PersonEntity.toDomain(links: List<SocialLink> = emptyList()) = Person(
     id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
     socialLinks = SocialLinkCatalog.mergeVisible(id, links, instagram, telegram, whatsapp),
+    sortOrder = sortOrder,
 )
 fun Person.toEntity() = PersonEntity(
-    id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor,
+    id, accountId, name, phone, note, firstName, lastName, email, instagram, telegram, whatsapp, avatarColor, sortOrder,
 )
 
 fun PersonSocialLinkEntity.toDomain() = SocialLink(id, personId, label, value, sortOrder)
@@ -120,3 +131,26 @@ fun BackupMetadataEntity.toDomain() = BackupMetadata(
 fun BackupMetadata.toEntity() = BackupMetadataEntity(
     id, provider.name, remoteIdOrUri, fileName, checksum, schemaVersion, includesSecrets, createdAt,
 )
+
+fun NoteEntity.toDomain() = Note(id, body, jalaliYear, jalaliMonth, jalaliDay, occurredAt, createdAt)
+fun Note.toEntity() = NoteEntity(id, body, year, month, day, occurredAt, createdAt)
+
+fun ChequeEntity.toDomain() = Cheque(
+    id, FlowSide.valueOf(side), amount, counterparty, personId,
+    jalaliYear, jalaliMonth, jalaliDay, dueAt, ChequeStatus.valueOf(status), note, createdAt,
+)
+fun Cheque.toEntity() = ChequeEntity(
+    id, side.name, amount, counterparty, personId, year, month, day, dueAt, status.name, note, createdAt,
+)
+
+fun InstallmentEntity.toDomain() = InstallmentPlan(
+    id, FlowSide.valueOf(side), title, totalAmount, installmentAmount, count, paidCount,
+    counterparty, personId, jalaliYear, jalaliMonth, jalaliDay, nextDueAt, note, createdAt,
+)
+fun InstallmentPlan.toEntity() = InstallmentEntity(
+    id, side.name, title, totalAmount, installmentAmount, count, paidCount,
+    counterparty, personId, year, month, day, nextDueAt, note, createdAt,
+)
+
+fun MonthBudgetEntity.toDomain() = MonthBudget(jalaliYear, jalaliMonth, limitRials)
+fun MonthBudget.toEntity() = MonthBudgetEntity(year, month, limitRials)
