@@ -297,4 +297,6 @@
     <string name="no_balance">بی‌حساب</string>
     <string name="spent_label">خرج‌شده</string>
     <string name="backup_info">پشتیبان محلی روی همین گوشی ذخیره می‌شود و رمز کارت را همراه خود نمی‌برد.</string>
+    <string name="about">درباره</string>
+    <string name="about_version">نسخه %1$s  ·  ساخت %2$s</string>
 </resources>
