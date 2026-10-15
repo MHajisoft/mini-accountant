@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -86,17 +85,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.compose.cartesian.data.columnSeries
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.pie.PieChartHost
-import com.patrykandpatrick.vico.compose.pie.data.PieChartModelProducer
-import com.patrykandpatrick.vico.compose.pie.data.pieSeries
-import com.patrykandpatrick.vico.compose.pie.rememberPieChart
 import ir.mhajisoft.hesabres.MainActivity
 import ir.mhajisoft.hesabres.R
 import ir.mhajisoft.hesabres.data.repository.AccountBalance
@@ -798,66 +786,6 @@ fun ReportScreen(
     ReportDashboard(state, onFiltered)
 }
 
-
-@Composable
-private fun ReportCharts(
-    byCat: Map<String, Long>,
-    rows: List<LedgerTransaction>,
-    yearMode: Boolean,
-    onSlice: (String) -> Unit,
-) {
-    val pieProducer = remember { PieChartModelProducer() }
-    val barProducer = remember { CartesianChartModelProducer() }
-    val catKeys = remember(byCat) { byCat.keys.toList() }
-    var ready by remember { mutableStateOf(false) }
-    LaunchedEffect(byCat, rows, yearMode) {
-        val grouped = if (yearMode) rows.groupBy { it.jalaliMonth } else rows.groupBy { it.jalaliDay }
-        val daily = grouped.toSortedMap().filter { it.value.isNotEmpty() }
-        if (byCat.isEmpty() || daily.isEmpty()) {
-            ready = false
-            return@LaunchedEffect
-        }
-        val plotted = runCatching {
-            pieProducer.runTransaction {
-                pieSeries {
-                    series(byCat.values.map { it.toDouble() })
-                }
-            }
-            barProducer.runTransaction {
-                columnSeries {
-                    series(
-                        daily.keys.map { it.toDouble() },
-                        daily.values.map { v ->
-                            v.filter { it.direction == Direction.OUT }.sumOf { it.amount }.toDouble()
-                        },
-                    )
-                }
-            }
-        }
-        ready = plotted.isSuccess
-    }
-    val pieChart = rememberPieChart()
-    val columnLayer = rememberColumnCartesianLayer()
-    val barChart = rememberCartesianChart(
-        columnLayer,
-        startAxis = VerticalAxis.rememberStart(),
-        bottomAxis = HorizontalAxis.rememberBottom(),
-    )
-    if (!ready) return
-    PieChartHost(
-        chart = pieChart,
-        modelProducer = pieProducer,
-        modifier = Modifier.height(200.dp).fillMaxWidth().clickable {
-            catKeys.firstOrNull()?.let(onSlice)
-        },
-    )
-    Text(stringResource(R.string.daily_bars), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
-    CartesianChartHost(
-        barChart,
-        barProducer,
-        modifier = Modifier.height(180.dp),
-    )
-}
 
 @Composable
 fun MoreScreen(open: (NavKey) -> Unit) {
